@@ -6,8 +6,6 @@ import Placeholder from "@tiptap/extension-placeholder";
 import { MediaBlock } from "./media-block";
 import { useState, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -15,10 +13,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { MediaType } from "@/lib/types";
+import { getTracks } from "@/lib/firestore";
+import type { Track, MediaType } from "@/lib/types";
 
 interface ChapterRichEditorProps {
-  initialContent: string; // body with \n\n between paragraphs
+  initialContent: string;
   onSave: (body: string, mediaHooks: MediaHook[]) => Promise<void>;
   existingHooks?: MediaHook[];
 }
@@ -39,37 +38,30 @@ export function ChapterRichEditor({
 }: ChapterRichEditorProps) {
   const [saving, setSaving] = useState(false);
   const [showInsert, setShowInsert] = useState(false);
-  const [insertType, setInsertType] = useState<MediaType>("music");
-  const [insertTitle, setInsertTitle] = useState("");
-  const [insertUrl, setInsertUrl] = useState("");
 
-  // Convert body text to TipTap HTML.
-  const bodyToHtml = (body: string, hooks: MediaHook[]) => {
+  // Available media from Firestore.
+  const [availableTracks, setAvailableTracks] = useState<Track[]>([]);
+  const [selectedTrackId, setSelectedTrackId] = useState("");
+
+  useEffect(() => {
+    getTracks().then(setAvailableTracks);
+  }, []);
+
+  const bodyToHtml = (body: string) => {
     const paragraphs = body.split("\n\n").filter((p) => p.trim());
-    let html = paragraphs.map((p) => `<p>${escapeHtml(p)}</p>`).join("");
-
-    // Insert existing hooks as media blocks (at end for now, will be positioned by backoffice)
-    for (const hook of hooks) {
-      html += `<div data-media-block data-media-type="${hook.mediaType}" data-title="${escapeHtml(hook.title)}" data-media-url="${hook.mediaUrl}"></div>`;
-    }
-
-    return html;
+    return paragraphs.map((p) => `<p>${escapeHtml(p)}</p>`).join("");
   };
 
-  // Convert TipTap content back to body text + media hooks.
   const htmlToBody = (editor: ReturnType<typeof useEditor>) => {
     if (!editor) return { body: "", hooks: [] as MediaHook[] };
-
     const json = editor.getJSON();
     const paragraphs: string[] = [];
     const hooks: MediaHook[] = [];
 
     for (const node of json.content || []) {
       if (node.type === "paragraph") {
-        const text = (node.content || [])
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          .map((c: any) => c.text || "")
-          .join("");
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const text = (node.content || []).map((c: any) => c.text || "").join("");
         if (text.trim()) paragraphs.push(text);
       } else if (node.type === "mediaBlock") {
         hooks.push({
@@ -82,13 +74,16 @@ export function ChapterRichEditor({
         });
       }
     }
-
     return { body: paragraphs.join("\n\n"), hooks };
   };
 
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
+        // Solo texto plano — sin formateo.
+        bold: false,
+        italic: false,
+        strike: false,
         heading: false,
         bulletList: false,
         orderedList: false,
@@ -102,11 +97,10 @@ export function ChapterRichEditor({
       }),
       MediaBlock,
     ],
-    content: bodyToHtml(initialContent, existingHooks),
+    content: bodyToHtml(initialContent),
     editorProps: {
       attributes: {
-        class:
-          "prose prose-zinc max-w-none focus:outline-none min-h-[400px] text-[15px] leading-[1.9] text-zinc-800",
+        class: "focus:outline-none min-h-[400px] text-[15px] leading-[1.9] text-zinc-800",
       },
     },
   });
@@ -120,7 +114,10 @@ export function ChapterRichEditor({
   }, [editor, onSave]);
 
   const handleInsertMedia = useCallback(() => {
-    if (!editor || !insertTitle) return;
+    if (!editor || !selectedTrackId) return;
+
+    const track = availableTracks.find((t) => t.id === selectedTrackId);
+    if (!track) return;
 
     editor
       .chain()
@@ -128,10 +125,10 @@ export function ChapterRichEditor({
       .insertContent({
         type: "mediaBlock",
         attrs: {
-          mediaType: insertType,
-          mediaId: insertTitle.toLowerCase().replace(/\s+/g, "-"),
-          title: insertTitle,
-          mediaUrl: insertUrl,
+          mediaType: track.isInstrumental ? "music" : "music",
+          mediaId: track.id,
+          title: track.title,
+          mediaUrl: track.audioUrl,
           isExclusive: true,
           displayStyle: "inline",
         },
@@ -139,9 +136,8 @@ export function ChapterRichEditor({
       .run();
 
     setShowInsert(false);
-    setInsertTitle("");
-    setInsertUrl("");
-  }, [editor, insertType, insertTitle, insertUrl]);
+    setSelectedTrackId("");
+  }, [editor, selectedTrackId, availableTracks]);
 
   return (
     <div>
@@ -157,7 +153,7 @@ export function ChapterRichEditor({
             + Insertar media
           </Button>
           <span className="text-xs text-zinc-400 ml-2">
-            Pon el cursor donde quieras insertar el contenido multimedia
+            Pon el cursor donde quieras y selecciona el contenido
           </span>
         </div>
         <Button
@@ -170,64 +166,49 @@ export function ChapterRichEditor({
         </Button>
       </div>
 
-      {/* Insert media panel */}
+      {/* Insert media panel — selector de contenido existente */}
       {showInsert && (
         <div className="bg-amber-50 border-b border-amber-200 px-4 py-3 flex items-end gap-3">
-          <div className="w-32">
-            <Label className="text-xs text-zinc-500">Tipo</Label>
-            <Select
-              value={insertType}
-              onValueChange={(v) => setInsertType(v as MediaType)}
-            >
+          <div className="flex-1">
+            <label className="text-xs text-zinc-500 mb-1 block">Selecciona el contenido a insertar</label>
+            <Select value={selectedTrackId} onValueChange={(v) => setSelectedTrackId(v || "")}>
               <SelectTrigger className="bg-white border-zinc-300 text-zinc-900 h-9">
-                <SelectValue />
+                <SelectValue placeholder="Elige una canción, audio o vídeo..." />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="music">🎵 Música</SelectItem>
-                <SelectItem value="audio">🎙️ Audio</SelectItem>
-                <SelectItem value="video">🎬 Vídeo</SelectItem>
-                <SelectItem value="image">🖼️ Imagen</SelectItem>
+                {availableTracks.filter(t => !t.isInstrumental).map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    🎵 {t.title} — {t.artist}
+                  </SelectItem>
+                ))}
+                {availableTracks.filter(t => t.isInstrumental).map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    🎹 {t.title}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
-          </div>
-          <div className="flex-1">
-            <Label className="text-xs text-zinc-500">Título</Label>
-            <Input
-              value={insertTitle}
-              onChange={(e) => setInsertTitle(e.target.value)}
-              placeholder="Nombre del contenido"
-              className="bg-white border-zinc-300 text-zinc-900 h-9"
-            />
-          </div>
-          <div className="flex-1">
-            <Label className="text-xs text-zinc-500">URL (opcional)</Label>
-            <Input
-              value={insertUrl}
-              onChange={(e) => setInsertUrl(e.target.value)}
-              placeholder="https://..."
-              className="bg-white border-zinc-300 text-zinc-900 h-9"
-            />
           </div>
           <Button
             size="sm"
             onClick={handleInsertMedia}
-            disabled={!insertTitle}
+            disabled={!selectedTrackId}
             className="bg-amber-600 hover:bg-amber-700 text-white h-9"
           >
-            Insertar
+            Insertar aquí
           </Button>
           <Button
             size="sm"
             variant="ghost"
-            onClick={() => setShowInsert(false)}
-            className="h-9"
+            onClick={() => { setShowInsert(false); setSelectedTrackId(""); }}
+            className="h-9 text-zinc-500"
           >
             ✕
           </Button>
         </div>
       )}
 
-      {/* Editor */}
+      {/* Editor de texto plano */}
       <div className="bg-white border border-zinc-200 rounded-b-xl shadow-sm p-8 md:p-12">
         <EditorContent editor={editor} />
       </div>
@@ -236,8 +217,5 @@ export function ChapterRichEditor({
 }
 
 function escapeHtml(text: string) {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
