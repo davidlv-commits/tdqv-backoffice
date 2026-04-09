@@ -49,15 +49,16 @@ export async function saveChapter(bookId: string, chapter: Partial<Chapter> & { 
 // ═══ Media Moments ═══
 
 export async function getMediaMoments(bookId: string, chapterId: string): Promise<MediaMoment[]> {
+  // Only filter by equality fields to avoid needing a composite index with orderBy.
+  // Sorting is done client-side.
   const q = query(
     collection(db, 'media_moments'),
     where('bookId', '==', bookId),
     where('chapterId', '==', chapterId),
-    orderBy('paragraphIndex'),
-    orderBy('order'),
   );
   const snap = await getDocs(q);
-  return snap.docs.map(d => ({ id: d.id, ...d.data() } as MediaMoment));
+  const moments = snap.docs.map(d => ({ id: d.id, ...d.data() } as MediaMoment));
+  return moments.sort((a, b) => a.paragraphIndex - b.paragraphIndex || a.order - b.order);
 }
 
 export async function saveMediaMoment(moment: Omit<MediaMoment, 'id'>) {

@@ -49,4 +49,5 @@ export interface Track {
   duration?: number;
   order: number;
   active: boolean;
+  lyrics?: string;
 }
