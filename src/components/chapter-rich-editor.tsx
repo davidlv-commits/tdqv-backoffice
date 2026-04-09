@@ -41,11 +41,21 @@ export function ChapterRichEditor({
 
   // Available media from Firestore.
   const [availableTracks, setAvailableTracks] = useState<Track[]>([]);
+  const [selectedMediaType, setSelectedMediaType] = useState<string>("");
   const [selectedTrackId, setSelectedTrackId] = useState("");
 
   useEffect(() => {
     getTracks().then(setAvailableTracks);
   }, []);
+
+  // Filtrar media según el tipo seleccionado.
+  const filteredMedia = availableTracks.filter((t) => {
+    if (selectedMediaType === "music") return !t.isInstrumental;
+    if (selectedMediaType === "instrumental") return t.isInstrumental;
+    // audio, video, image: por ahora no hay tracks de estos tipos,
+    // se añadirán cuando el backoffice gestione más tipos de media.
+    return false;
+  });
 
   const bodyToHtml = (body: string) => {
     const paragraphs = body.split("\n\n").filter((p) => p.trim());
@@ -119,13 +129,15 @@ export function ChapterRichEditor({
     const track = availableTracks.find((t) => t.id === selectedTrackId);
     if (!track) return;
 
+    const mType = selectedMediaType === "instrumental" ? "music" : (selectedMediaType || "music");
+
     editor
       .chain()
       .focus()
       .insertContent({
         type: "mediaBlock",
         attrs: {
-          mediaType: track.isInstrumental ? "music" : "music",
+          mediaType: mType,
           mediaId: track.id,
           title: track.title,
           mediaUrl: track.audioUrl,
@@ -166,33 +178,54 @@ export function ChapterRichEditor({
         </Button>
       </div>
 
-      {/* Insert media panel — selector de contenido existente */}
+      {/* Insert media panel — dos desplegables: tipo → contenido */}
       {showInsert && (
         <div className="bg-amber-50 border-b border-amber-200 px-4 py-3 flex items-end gap-3">
-          <div className="flex-1">
-            <label className="text-xs text-zinc-500 mb-1 block">Selecciona el contenido a insertar</label>
-            <Select value={selectedTrackId} onValueChange={(v) => setSelectedTrackId(v || "")}>
+          {/* Paso 1: Tipo de media */}
+          <div className="w-40">
+            <label className="text-xs text-zinc-500 mb-1 block">Tipo</label>
+            <Select value={selectedMediaType} onValueChange={(v) => { setSelectedMediaType(v || ""); setSelectedTrackId(""); }}>
               <SelectTrigger className="bg-white border-zinc-300 text-zinc-900 h-9">
-                <SelectValue placeholder="Elige una canción, audio o vídeo..." />
+                <SelectValue placeholder="Tipo..." />
               </SelectTrigger>
               <SelectContent>
-                {availableTracks.filter(t => !t.isInstrumental).map((t) => (
-                  <SelectItem key={t.id} value={t.id}>
-                    🎵 {t.title} — {t.artist}
-                  </SelectItem>
-                ))}
-                {availableTracks.filter(t => t.isInstrumental).map((t) => (
-                  <SelectItem key={t.id} value={t.id}>
-                    🎹 {t.title}
-                  </SelectItem>
-                ))}
+                <SelectItem value="music">🎵 Música</SelectItem>
+                <SelectItem value="instrumental">🎹 Instrumental</SelectItem>
+                <SelectItem value="audio">🎙️ Audio</SelectItem>
+                <SelectItem value="video">🎬 Vídeo</SelectItem>
+                <SelectItem value="image">🖼️ Imagen</SelectItem>
               </SelectContent>
             </Select>
           </div>
+
+          {/* Paso 2: Contenido filtrado por tipo */}
+          <div className="flex-1">
+            <label className="text-xs text-zinc-500 mb-1 block">Contenido</label>
+            <Select
+              value={selectedTrackId}
+              onValueChange={(v) => setSelectedTrackId(v || "")}
+              disabled={!selectedMediaType}
+            >
+              <SelectTrigger className="bg-white border-zinc-300 text-zinc-900 h-9">
+                <SelectValue placeholder={selectedMediaType ? "Selecciona..." : "Elige un tipo primero"} />
+              </SelectTrigger>
+              <SelectContent>
+                {filteredMedia.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.title} {t.artist !== "TDQV" && t.artist !== "TDQV Instrumental" ? `— ${t.artist}` : ""}
+                  </SelectItem>
+                ))}
+                {filteredMedia.length === 0 && (
+                  <SelectItem value="__empty" disabled>No hay contenido de este tipo</SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+
           <Button
             size="sm"
             onClick={handleInsertMedia}
-            disabled={!selectedTrackId}
+            disabled={!selectedTrackId || selectedTrackId === "__empty"}
             className="bg-amber-600 hover:bg-amber-700 text-white h-9"
           >
             Insertar aquí
@@ -200,7 +233,7 @@ export function ChapterRichEditor({
           <Button
             size="sm"
             variant="ghost"
-            onClick={() => { setShowInsert(false); setSelectedTrackId(""); }}
+            onClick={() => { setShowInsert(false); setSelectedTrackId(""); setSelectedMediaType(""); }}
             className="h-9 text-zinc-500"
           >
             ✕
