@@ -33,19 +33,19 @@ export default function Dashboard() {
 
 function StatCard({ title, value, subtitle }: { title: string; value: string; subtitle: string }) {
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
-      <p className="text-sm text-zinc-500">{title}</p>
+    <div className="bg-zinc-800/60 border border-zinc-700/50 rounded-xl p-5">
+      <p className="text-sm text-zinc-400">{title}</p>
       <p className="text-3xl font-bold text-amber-500 mt-1">{value}</p>
-      <p className="text-xs text-zinc-600 mt-1">{subtitle}</p>
+      <p className="text-xs text-zinc-500 mt-1">{subtitle}</p>
     </div>
   );
 }
 
 function QuickLink({ href, title, subtitle }: { href: string; title: string; subtitle: string }) {
   return (
-    <Link href={href} className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 hover:border-amber-500/30 transition-colors block">
+    <Link href={href} className="bg-zinc-800/60 border border-zinc-700/50 rounded-xl p-5 hover:border-amber-500/30 transition-colors block">
       <p className="font-medium">{title}</p>
-      <p className="text-sm text-zinc-500 mt-1">{subtitle}</p>
+      <p className="text-sm text-zinc-400 mt-1">{subtitle}</p>
     </Link>
   );
 }

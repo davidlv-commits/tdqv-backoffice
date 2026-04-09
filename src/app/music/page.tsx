@@ -58,12 +58,10 @@ export default function MusicPage() {
         id: expandedId,
         ...editData,
       };
-      // Remove empty optional fields
       if (!dataToSave.lyrics) delete dataToSave.lyrics;
       if (!dataToSave.linkedMainTrackId) delete dataToSave.linkedMainTrackId;
 
       await saveTrack(dataToSave);
-      // Update local state
       setTracks((prev) =>
         prev.map((t) => (t.id === expandedId ? { ...t, ...editData } : t))
       );
@@ -107,9 +105,9 @@ export default function MusicPage() {
           {loading ? (
             <p className="text-zinc-500">Cargando tracks...</p>
           ) : tracks.length === 0 ? (
-            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-8 text-center">
+            <div className="bg-zinc-800/60 border border-zinc-700/50 rounded-xl p-8 text-center">
               <p className="text-zinc-400 mb-2">No hay tracks en Firestore</p>
-              <p className="text-sm text-zinc-600">
+              <p className="text-sm text-zinc-500">
                 Necesitas migrar los tracks desde el codigo Flutter.
               </p>
             </div>
@@ -120,10 +118,10 @@ export default function MusicPage() {
                   {/* Track row */}
                   <div
                     onClick={() => handleExpand(track)}
-                    className={`flex items-center gap-4 bg-zinc-900 border rounded-lg px-5 py-4 cursor-pointer transition-colors ${
+                    className={`flex items-center gap-4 bg-zinc-800/60 border rounded-lg px-5 py-4 cursor-pointer transition-colors ${
                       expandedId === track.id
-                        ? "border-amber-500/50"
-                        : "border-zinc-800 hover:border-zinc-700"
+                        ? "border-amber-500/50 rounded-b-none"
+                        : "border-zinc-700/50 hover:border-zinc-600"
                     }`}
                   >
                     <span className="text-amber-500/60 font-mono text-sm w-6">
@@ -138,7 +136,7 @@ export default function MusicPage() {
                     )}
                     <div className="flex-1 min-w-0">
                       <p className="font-medium truncate">{track.title}</p>
-                      <p className="text-sm text-zinc-500 truncate">
+                      <p className="text-sm text-zinc-400 truncate">
                         {track.artist} · {track.album}
                       </p>
                     </div>
@@ -183,29 +181,22 @@ export default function MusicPage() {
 
                   {/* Expanded edit form */}
                   {expandedId === track.id && (
-                    <div className="bg-zinc-900/50 border border-zinc-800 border-t-0 rounded-b-lg p-5 space-y-4 -mt-1">
+                    <div className="bg-zinc-800/40 border border-zinc-700/50 border-t-0 rounded-b-lg p-5 space-y-5">
+                      {/* Basic info */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                          <Label className="text-xs text-zinc-400">
-                            Titulo
-                          </Label>
+                          <Label className="text-xs text-zinc-400">Titulo</Label>
                           <Input
                             value={editData.title || ""}
-                            onChange={(e) =>
-                              updateField("title", e.target.value)
-                            }
+                            onChange={(e) => updateField("title", e.target.value)}
                             className="bg-zinc-800 border-zinc-700"
                           />
                         </div>
                         <div>
-                          <Label className="text-xs text-zinc-400">
-                            Artista
-                          </Label>
+                          <Label className="text-xs text-zinc-400">Artista</Label>
                           <Input
                             value={editData.artist || ""}
-                            onChange={(e) =>
-                              updateField("artist", e.target.value)
-                            }
+                            onChange={(e) => updateField("artist", e.target.value)}
                             className="bg-zinc-800 border-zinc-700"
                           />
                         </div>
@@ -213,9 +204,7 @@ export default function MusicPage() {
                           <Label className="text-xs text-zinc-400">Album</Label>
                           <Input
                             value={editData.album || ""}
-                            onChange={(e) =>
-                              updateField("album", e.target.value)
-                            }
+                            onChange={(e) => updateField("album", e.target.value)}
                             className="bg-zinc-800 border-zinc-700"
                           />
                         </div>
@@ -224,99 +213,122 @@ export default function MusicPage() {
                           <Input
                             type="number"
                             value={editData.order ?? 0}
-                            onChange={(e) =>
-                              updateField("order", parseInt(e.target.value) || 0)
-                            }
+                            onChange={(e) => updateField("order", parseInt(e.target.value) || 0)}
                             className="bg-zinc-800 border-zinc-700"
                           />
                         </div>
                       </div>
 
+                      {/* Audio preview */}
                       <div>
-                        <Label className="text-xs text-zinc-400">
-                          URL del audio
-                        </Label>
-                        <Input
-                          value={editData.audioUrl || ""}
-                          onChange={(e) =>
-                            updateField("audioUrl", e.target.value)
-                          }
-                          placeholder="https://..."
-                          className="bg-zinc-800 border-zinc-700"
-                        />
-                      </div>
-
-                      <div>
-                        <Label className="text-xs text-zinc-400">
-                          URL de la portada
-                        </Label>
-                        <Input
-                          value={editData.coverUrl || ""}
-                          onChange={(e) =>
-                            updateField("coverUrl", e.target.value)
-                          }
-                          placeholder="https://..."
-                          className="bg-zinc-800 border-zinc-700"
-                        />
-                        {editData.coverUrl && (
-                          <img
-                            src={editData.coverUrl}
-                            alt="Preview"
-                            className="w-16 h-16 rounded mt-2 object-cover"
-                          />
+                        <Label className="text-xs text-zinc-400 mb-2 block">Audio</Label>
+                        {editData.audioUrl ? (
+                          <div className="bg-zinc-900/60 border border-zinc-700/40 rounded-lg p-4 space-y-3">
+                            <audio
+                              controls
+                              src={editData.audioUrl}
+                              className="w-full h-10"
+                              preload="none"
+                            />
+                            <div className="flex items-center gap-2">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-xs text-zinc-500 hover:text-zinc-300"
+                                disabled
+                              >
+                                Subir nuevo audio
+                              </Button>
+                              <span className="text-xs text-zinc-600">(proximamente)</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="bg-zinc-900/60 border border-zinc-700/40 border-dashed rounded-lg p-4 text-center">
+                            <p className="text-sm text-zinc-500 mb-2">Sin audio asignado</p>
+                            <Button size="sm" variant="ghost" className="text-xs text-zinc-500" disabled>
+                              Subir audio (proximamente)
+                            </Button>
+                          </div>
                         )}
                       </div>
 
+                      {/* Cover preview */}
+                      <div>
+                        <Label className="text-xs text-zinc-400 mb-2 block">Portada</Label>
+                        {editData.coverUrl ? (
+                          <div className="bg-zinc-900/60 border border-zinc-700/40 rounded-lg p-4">
+                            <div className="flex items-start gap-4">
+                              <img
+                                src={editData.coverUrl}
+                                alt="Portada"
+                                className="w-24 h-24 rounded-lg object-cover"
+                              />
+                              <div className="flex-1 space-y-2">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="text-xs text-zinc-500 hover:text-zinc-300"
+                                  disabled
+                                >
+                                  Cambiar portada (proximamente)
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="bg-zinc-900/60 border border-zinc-700/40 border-dashed rounded-lg p-4 text-center">
+                            <p className="text-sm text-zinc-500 mb-2">Sin portada</p>
+                            <Button size="sm" variant="ghost" className="text-xs text-zinc-500" disabled>
+                              Subir portada (proximamente)
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Linked track */}
                       <div>
                         <Label className="text-xs text-zinc-400">
                           ID del track principal (si es instrumental)
                         </Label>
                         <Input
                           value={(editData.linkedMainTrackId as string) || ""}
-                          onChange={(e) =>
-                            updateField("linkedMainTrackId", e.target.value)
-                          }
+                          onChange={(e) => updateField("linkedMainTrackId", e.target.value)}
                           placeholder="ej: track_01"
                           className="bg-zinc-800 border-zinc-700"
                         />
                       </div>
 
+                      {/* Lyrics */}
                       <div>
-                        <Label className="text-xs text-zinc-400">Letra</Label>
+                        <Label className="text-xs text-zinc-400 mb-1 block">Letra</Label>
                         <Textarea
                           value={(editData.lyrics as string) || ""}
-                          onChange={(e) =>
-                            updateField("lyrics", e.target.value)
-                          }
+                          onChange={(e) => updateField("lyrics", e.target.value)}
                           placeholder="Escribe la letra de la cancion..."
-                          rows={6}
-                          className="bg-zinc-800 border-zinc-700 font-mono text-sm"
+                          className="bg-zinc-800 border-zinc-700 font-mono text-sm min-h-[200px] p-4"
+                          style={{ minHeight: "200px" }}
                         />
                       </div>
 
+                      {/* Toggles */}
                       <div className="flex items-center gap-6">
                         <div className="flex items-center gap-2">
                           <Switch
                             checked={editData.isInstrumental || false}
-                            onCheckedChange={(v) =>
-                              updateField("isInstrumental", v)
-                            }
+                            onCheckedChange={(v) => updateField("isInstrumental", v)}
                           />
-                          <Label className="text-xs text-zinc-400">
-                            Instrumental
-                          </Label>
+                          <Label className="text-xs text-zinc-400">Instrumental</Label>
                         </div>
                         <div className="flex items-center gap-2">
                           <Switch
                             checked={editData.active || false}
                             onCheckedChange={(v) => updateField("active", v)}
                           />
-                          <Label className="text-xs text-zinc-400">
-                            Activo
-                          </Label>
+                          <Label className="text-xs text-zinc-400">Activo</Label>
                         </div>
                       </div>
 
+                      {/* Actions */}
                       <div className="flex gap-2 pt-2">
                         <Button
                           onClick={handleSave}

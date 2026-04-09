@@ -236,7 +236,7 @@ export default function MediaPage() {
 
               {/* Content area */}
               {!selectedBook ? (
-                <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-8 text-center">
+                <div className="bg-zinc-800/60 border border-zinc-700/50 rounded-xl p-8 text-center">
                   <p className="text-zinc-400 mb-2">
                     Selecciona un libro para ver los media moments
                   </p>
@@ -246,7 +246,7 @@ export default function MediaPage() {
                   </p>
                 </div>
               ) : !selectedChapter ? (
-                <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-8 text-center">
+                <div className="bg-zinc-800/60 border border-zinc-700/50 rounded-xl p-8 text-center">
                   <p className="text-zinc-400">
                     Selecciona un capitulo para ver sus media moments
                   </p>
@@ -271,7 +271,7 @@ export default function MediaPage() {
 
                   {/* New moment form */}
                   {showForm && (
-                    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 mb-6 space-y-4">
+                    <div className="bg-zinc-800/60 border border-zinc-700/50 rounded-xl p-5 mb-6 space-y-4">
                       <h3 className="font-semibold text-sm text-zinc-300">
                         Crear nuevo media moment
                       </h3>
@@ -476,7 +476,7 @@ export default function MediaPage() {
 
                   {/* Moments list */}
                   {!loadingMoments && moments.length === 0 && !showForm && (
-                    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-8 text-center">
+                    <div className="bg-zinc-800/60 border border-zinc-700/50 rounded-xl p-8 text-center">
                       <p className="text-zinc-400 mb-2">
                         Este capitulo no tiene media moments
                       </p>
@@ -494,8 +494,8 @@ export default function MediaPage() {
                           key={m.id}
                           className={`flex items-center gap-4 bg-zinc-900 border rounded-lg px-5 py-4 ${
                             m.active
-                              ? "border-zinc-800"
-                              : "border-zinc-800 opacity-60"
+                              ? "border-zinc-700/50"
+                              : "border-zinc-700/50 opacity-60"
                           }`}
                         >
                           <span className="text-amber-500/60 font-mono text-sm w-8">
