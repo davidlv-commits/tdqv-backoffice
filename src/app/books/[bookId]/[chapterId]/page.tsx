@@ -5,35 +5,16 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { AuthGuard } from "@/components/auth-guard";
 import { Sidebar } from "@/components/sidebar";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { getChapter, getMediaMoments, saveMediaMoment, deleteMediaMoment, saveChapter } from "@/lib/firestore";
-import type { Chapter, MediaMoment, MediaType, DisplayStyle } from "@/lib/types";
+import { ChapterRichEditor, type MediaHook } from "@/components/chapter-rich-editor";
+import { getChapter, getMediaMoments, saveChapter, saveMediaMoment, deleteMediaMoment } from "@/lib/firestore";
+import type { Chapter, MediaMoment } from "@/lib/types";
 
-export default function ChapterEditor() {
+export default function ChapterEditorPage() {
   const { bookId, chapterId } = useParams<{ bookId: string; chapterId: string }>();
   const [chapter, setChapter] = useState<Chapter | null>(null);
-  const [paragraphs, setParagraphs] = useState<string[]>([]);
   const [moments, setMoments] = useState<MediaMoment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [addingAt, setAddingAt] = useState<number | null>(null);
-
-  // Text editor modal state
-  const [showTextEditor, setShowTextEditor] = useState(false);
-  const [editableBody, setEditableBody] = useState("");
-  const [savingText, setSavingText] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
-
-  // Form state for new media moment.
-  const [newType, setNewType] = useState<MediaType>("music");
-  const [newTitle, setNewTitle] = useState("");
-  const [newUrl, setNewUrl] = useState("");
-  const [newExclusive, setNewExclusive] = useState(true);
-  const [newDisplay, setNewDisplay] = useState<DisplayStyle>("inline");
 
   useEffect(() => {
     Promise.all([
@@ -42,291 +23,108 @@ export default function ChapterEditor() {
     ]).then(([ch, mm]) => {
       setChapter(ch);
       setMoments(mm);
-      if (ch?.body) {
-        setParagraphs(ch.body.split("\n\n").filter((p) => p.trim()));
-      }
       setLoading(false);
     });
   }, [bookId, chapterId]);
 
-  const openTextEditor = useCallback(() => {
-    setEditableBody(paragraphs.join("\n\n"));
-    setShowTextEditor(true);
-    setSaveMessage("");
-  }, [paragraphs]);
-
-  const handleSaveText = async () => {
+  const handleSave = useCallback(async (body: string, hooks: MediaHook[]) => {
     if (!chapter) return;
-    setSavingText(true);
-    setSaveMessage("");
     try {
-      const newParagraphs = editableBody.split("\n\n").filter((p) => p.trim());
+      // Save the updated text.
+      const paragraphs = body.split("\n\n").filter(p => p.trim());
       await saveChapter(bookId, {
         id: chapterId,
-        body: editableBody,
-        paragraphCount: newParagraphs.length,
+        body,
+        paragraphCount: paragraphs.length,
       });
-      setParagraphs(newParagraphs);
-      setShowTextEditor(false);
-      setSaveMessage("Texto guardado correctamente");
+
+      // Delete old media moments and save new ones from editor hooks.
+      for (const m of moments) {
+        await deleteMediaMoment(m.id);
+      }
+      for (let i = 0; i < hooks.length; i++) {
+        const h = hooks[i];
+        await saveMediaMoment({
+          bookId,
+          chapterId,
+          paragraphIndex: i,
+          mediaType: h.mediaType,
+          mediaId: h.mediaId,
+          title: h.title,
+          mediaUrl: h.mediaUrl,
+          isExclusive: h.isExclusive,
+          displayStyle: h.displayStyle as "inline" | "fullscreen" | "ambient",
+          order: i,
+          active: true,
+        });
+      }
+
+      // Refresh moments.
+      const newMoments = await getMediaMoments(bookId, chapterId);
+      setMoments(newMoments);
+
+      // Update local chapter.
+      setChapter(prev => prev ? { ...prev, body, paragraphCount: paragraphs.length } : prev);
+
+      setSaveMessage("Guardado correctamente");
       setTimeout(() => setSaveMessage(""), 3000);
     } catch (e) {
-      console.error("Error saving chapter:", e);
       setSaveMessage("Error al guardar");
-    } finally {
-      setSavingText(false);
+      setTimeout(() => setSaveMessage(""), 3000);
     }
-  };
+  }, [bookId, chapterId, chapter, moments]);
 
-  const handleAddMoment = async () => {
-    if (addingAt === null || !newTitle) return;
-    await saveMediaMoment({
-      bookId,
-      chapterId,
-      paragraphIndex: addingAt,
-      mediaType: newType,
-      mediaId: newTitle.toLowerCase().replace(/\s+/g, "-"),
-      title: newTitle,
-      mediaUrl: newUrl,
-      isExclusive: newExclusive,
-      displayStyle: newDisplay,
-      unlockMessage: newExclusive ? "Podras acceder a este contenido tras leer el capitulo" : undefined,
-      order: 0,
-      active: true,
-    });
-    const mm = await getMediaMoments(bookId, chapterId);
-    setMoments(mm);
-    setAddingAt(null);
-    setNewTitle("");
-    setNewUrl("");
-  };
-
-  const handleDeleteMoment = async (id: string) => {
-    await deleteMediaMoment(id);
-    setMoments((prev) => prev.filter((m) => m.id !== id));
-  };
-
-  const getMomentsAt = (idx: number) => moments.filter((m) => m.paragraphIndex === idx);
+  // Convert existing moments to hooks for the editor.
+  const existingHooks: MediaHook[] = moments.map(m => ({
+    mediaType: m.mediaType,
+    mediaId: m.mediaId,
+    title: m.title,
+    mediaUrl: m.mediaUrl,
+    isExclusive: m.isExclusive,
+    displayStyle: m.displayStyle,
+  }));
 
   return (
     <AuthGuard>
       <div className="flex h-screen">
         <Sidebar />
-        <main className="flex-1 overflow-auto bg-slate-50 p-8">
+        <main className="flex-1 overflow-auto bg-slate-50">
           {/* Header */}
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <Link href={`/books/${bookId}`} className="text-zinc-400 hover:text-zinc-600">←</Link>
-              <div>
-                <h2 className="text-2xl font-bold text-zinc-900">{chapter?.title || chapterId}</h2>
-                <p className="text-sm text-zinc-500">
-                  Capitulo {chapter?.order} · {paragraphs.length} parrafos · {moments.length} media moments
-                </p>
+          <div className="sticky top-0 z-20 bg-slate-50 border-b border-zinc-200 px-8 py-4">
+            <div className="flex items-center justify-between max-w-5xl">
+              <div className="flex items-center gap-3">
+                <Link href={`/books/${bookId}`} className="text-zinc-400 hover:text-zinc-600 text-lg">←</Link>
+                <div>
+                  <h2 className="text-xl font-bold text-zinc-900">{chapter?.title || chapterId}</h2>
+                  <p className="text-sm text-zinc-500">
+                    Capítulo {chapter?.order} · {chapter?.paragraphCount || 0} párrafos · {moments.length} media
+                  </p>
+                </div>
               </div>
-            </div>
-            <div className="flex items-center gap-3">
               {saveMessage && (
                 <span className={`text-sm ${saveMessage.includes("Error") ? "text-red-500" : "text-green-600"}`}>
                   {saveMessage}
                 </span>
               )}
-              <Button
-                onClick={openTextEditor}
-                className="bg-amber-600 hover:bg-amber-700 text-white"
-              >
-                Editar texto
-              </Button>
             </div>
           </div>
 
-          {loading ? (
-            <p className="text-zinc-500">Cargando...</p>
-          ) : paragraphs.length === 0 ? (
-            <p className="text-zinc-500">Este capitulo no tiene contenido en Firestore.</p>
-          ) : (
-            <div className="max-w-4xl bg-white border border-zinc-200 rounded-xl shadow-sm p-8 md:p-12">
-              {/* Documento continuo tipo Word */}
-              <div className="prose prose-zinc max-w-none">
-                {paragraphs.map((p, idx) => (
-                  <div key={idx} className="group">
-                    {/* Párrafo con número sutil en el margen */}
-                    <div className="relative">
-                      <span className="absolute -left-8 top-0 text-amber-500/30 font-mono text-[10px] select-none">
-                        {idx}
-                      </span>
-                      <p className="text-[15px] text-zinc-800 leading-[1.9] mb-0">
-                        {p}
-                      </p>
-                    </div>
-
-                    {/* Media moments at this position */}
-                    {getMomentsAt(idx).map((m) => (
-                      <div
-                        key={m.id}
-                        className="my-3 flex items-center gap-3 bg-amber-50 border border-amber-200/60 rounded-lg px-4 py-3"
-                      >
-                        <Badge className={
-                          m.mediaType === "music" ? "bg-purple-100 text-purple-700 border-purple-200" :
-                          m.mediaType === "audio" ? "bg-blue-100 text-blue-700 border-blue-200" :
-                          m.mediaType === "video" ? "bg-red-100 text-red-700 border-red-200" :
-                          "bg-green-100 text-green-700 border-green-200"
-                        }>
-                          {m.mediaType}
-                        </Badge>
-                        <span className="text-sm font-medium text-zinc-800 flex-1">{m.title}</span>
-                        {m.isExclusive && (
-                          <Badge variant="outline" className="border-amber-400/50 text-amber-700 text-xs">
-                            Exclusivo
-                          </Badge>
-                        )}
-                        <button
-                          onClick={() => handleDeleteMoment(m.id)}
-                          className="text-zinc-400 hover:text-red-500 text-xs"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    ))}
-
-                    {/* Separador + insertar media */}
-                    {addingAt === idx ? (
-                      <div className="my-4 bg-amber-50 border border-amber-200/60 rounded-lg p-4 space-y-3">
-                        <div className="flex gap-3">
-                          <div className="flex-1">
-                            <Label className="text-xs text-zinc-500">Tipo</Label>
-                            <Select value={newType} onValueChange={(v) => setNewType(v as MediaType)}>
-                              <SelectTrigger className="bg-white border-zinc-300 text-zinc-900">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="music">Musica</SelectItem>
-                                <SelectItem value="audio">Audio</SelectItem>
-                                <SelectItem value="video">Video</SelectItem>
-                                <SelectItem value="image">Imagen</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="flex-1">
-                            <Label className="text-xs text-zinc-500">Estilo</Label>
-                            <Select value={newDisplay} onValueChange={(v) => setNewDisplay(v as DisplayStyle)}>
-                              <SelectTrigger className="bg-white border-zinc-300 text-zinc-900">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="inline">Inline</SelectItem>
-                                <SelectItem value="fullscreen">Fullscreen</SelectItem>
-                                <SelectItem value="ambient">Ambient</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
-                        <div>
-                          <Label className="text-xs text-zinc-500">Titulo</Label>
-                          <Input
-                            value={newTitle}
-                            onChange={(e) => setNewTitle(e.target.value)}
-                            placeholder="Nombre del contenido"
-                            className="bg-white border-zinc-300 text-zinc-900"
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-xs text-zinc-500">URL del media</Label>
-                          <Input
-                            value={newUrl}
-                            onChange={(e) => setNewUrl(e.target.value)}
-                            placeholder="https://..."
-                            className="bg-white border-zinc-300 text-zinc-900"
-                          />
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Switch
-                            checked={newExclusive}
-                            onCheckedChange={setNewExclusive}
-                          />
-                          <Label className="text-xs text-zinc-600">Exclusivo (bloqueado hasta completar capitulo)</Label>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button size="sm" onClick={handleAddMoment} className="bg-amber-600 hover:bg-amber-700 text-white">
-                            Guardar
-                          </Button>
-                          <Button size="sm" variant="ghost" onClick={() => setAddingAt(null)} className="text-zinc-600">
-                            Cancelar
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex justify-center my-2">
-                        <button
-                          onClick={() => setAddingAt(idx)}
-                          className="w-6 h-6 rounded-full border border-zinc-200 text-zinc-300 hover:border-amber-500 hover:text-amber-600 hover:bg-amber-50 opacity-0 group-hover:opacity-100 transition-all text-xs flex items-center justify-center"
-                          title="Insertar media aquí"
-                        >
-                          +
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          {/* Editor */}
+          <div className="max-w-5xl mx-auto p-8">
+            {loading ? (
+              <p className="text-zinc-500">Cargando capítulo...</p>
+            ) : !chapter?.body ? (
+              <p className="text-zinc-500">Este capítulo no tiene contenido.</p>
+            ) : (
+              <ChapterRichEditor
+                initialContent={chapter.body}
+                onSave={handleSave}
+                existingHooks={existingHooks}
+              />
+            )}
+          </div>
         </main>
       </div>
-
-      {/* Full-screen text editor modal */}
-      {showTextEditor && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl h-[90vh] flex flex-col">
-            {/* Modal header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200">
-              <div>
-                <h3 className="text-lg font-bold text-zinc-900">Editar texto del capitulo</h3>
-                <p className="text-sm text-zinc-500">
-                  Separa los parrafos con lineas en blanco. El texto se guarda tal cual en Firestore.
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <Button
-                  variant="ghost"
-                  onClick={() => setShowTextEditor(false)}
-                  className="text-zinc-600"
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  onClick={handleSaveText}
-                  disabled={savingText}
-                  className="bg-amber-600 hover:bg-amber-700 text-white"
-                >
-                  {savingText ? "Guardando..." : "Guardar cambios"}
-                </Button>
-              </div>
-            </div>
-
-            {/* Single large textarea */}
-            <div className="flex-1 p-6 overflow-hidden">
-              <textarea
-                value={editableBody}
-                onChange={(e) => setEditableBody(e.target.value)}
-                className="w-full h-full bg-zinc-50 border border-zinc-200 rounded-xl px-6 py-5 text-sm text-zinc-800 leading-relaxed resize-none focus:outline-none focus:border-amber-500/50 focus:ring-2 focus:ring-amber-500/20 transition-colors font-serif"
-                placeholder="Escribe el contenido del capitulo..."
-                spellCheck={false}
-              />
-            </div>
-
-            {/* Modal footer with stats */}
-            <div className="px-6 py-3 border-t border-zinc-200 flex items-center justify-between text-xs text-zinc-400">
-              <span>
-                {editableBody.split("\n\n").filter((p) => p.trim()).length} parrafos
-                · {editableBody.length} caracteres
-              </span>
-              <span>
-                Los parrafos se separan con una linea en blanco
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
     </AuthGuard>
   );
 }
