@@ -144,32 +144,26 @@ export default function ChapterEditor() {
           ) : paragraphs.length === 0 ? (
             <p className="text-zinc-500">Este capitulo no tiene contenido en Firestore.</p>
           ) : (
-            <div className="max-w-4xl bg-white border border-zinc-200 rounded-xl shadow-sm overflow-hidden">
-              {/* Paragraph list - read-only display */}
-              <div className="divide-y divide-zinc-100">
+            <div className="max-w-4xl bg-white border border-zinc-200 rounded-xl shadow-sm p-8 md:p-12">
+              {/* Documento continuo tipo Word */}
+              <div className="prose prose-zinc max-w-none">
                 {paragraphs.map((p, idx) => (
                   <div key={idx} className="group">
-                    {/* Paragraph row */}
-                    <div className="flex gap-0">
-                      {/* Gutter with paragraph number */}
-                      <div className="w-12 flex-shrink-0 bg-zinc-50 border-r border-zinc-100 flex items-start justify-center pt-5">
-                        <span className="text-amber-600/50 font-mono text-xs select-none">
-                          {idx}
-                        </span>
-                      </div>
-                      {/* Paragraph text */}
-                      <div className="flex-1 px-6 py-4">
-                        <p className="text-sm text-zinc-700 leading-relaxed whitespace-pre-wrap">
-                          {p}
-                        </p>
-                      </div>
+                    {/* Párrafo con número sutil en el margen */}
+                    <div className="relative">
+                      <span className="absolute -left-8 top-0 text-amber-500/30 font-mono text-[10px] select-none">
+                        {idx}
+                      </span>
+                      <p className="text-[15px] text-zinc-800 leading-[1.9] mb-0">
+                        {p}
+                      </p>
                     </div>
 
                     {/* Media moments at this position */}
                     {getMomentsAt(idx).map((m) => (
                       <div
                         key={m.id}
-                        className="ml-12 mr-6 mb-2 flex items-center gap-3 bg-amber-50 border border-amber-200/60 rounded-lg px-4 py-3"
+                        className="my-3 flex items-center gap-3 bg-amber-50 border border-amber-200/60 rounded-lg px-4 py-3"
                       >
                         <Badge className={
                           m.mediaType === "music" ? "bg-purple-100 text-purple-700 border-purple-200" :
@@ -194,9 +188,9 @@ export default function ChapterEditor() {
                       </div>
                     ))}
 
-                    {/* Insert media moment button */}
+                    {/* Separador + insertar media */}
                     {addingAt === idx ? (
-                      <div className="ml-12 mr-6 mb-3 bg-zinc-50 border border-zinc-200 rounded-lg p-4 space-y-3">
+                      <div className="my-4 bg-amber-50 border border-amber-200/60 rounded-lg p-4 space-y-3">
                         <div className="flex gap-3">
                           <div className="flex-1">
                             <Label className="text-xs text-zinc-500">Tipo</Label>
@@ -261,12 +255,13 @@ export default function ChapterEditor() {
                         </div>
                       </div>
                     ) : (
-                      <div className="ml-12 my-0.5">
+                      <div className="flex justify-center my-2">
                         <button
                           onClick={() => setAddingAt(idx)}
-                          className="text-xs text-zinc-300 hover:text-amber-600 opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity px-2 py-1"
+                          className="w-6 h-6 rounded-full border border-zinc-200 text-zinc-300 hover:border-amber-500 hover:text-amber-600 hover:bg-amber-50 opacity-0 group-hover:opacity-100 transition-all text-xs flex items-center justify-center"
+                          title="Insertar media aquí"
                         >
-                          + Insertar media aqui
+                          +
                         </button>
                       </div>
                     )}
