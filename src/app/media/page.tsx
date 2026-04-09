@@ -180,8 +180,8 @@ export default function MediaPage() {
     <AuthGuard>
       <div className="flex h-screen">
         <Sidebar />
-        <main className="flex-1 overflow-auto p-8">
-          <h2 className="text-2xl font-bold mb-6">Gestion de media</h2>
+        <main className="flex-1 overflow-auto bg-slate-50 p-8">
+          <h2 className="text-2xl font-bold text-zinc-900 mb-6">Gestion de media</h2>
 
           {loading ? (
             <p className="text-zinc-500">Cargando...</p>
@@ -197,7 +197,7 @@ export default function MediaPage() {
                     value={selectedBook}
                     onValueChange={(v) => setSelectedBook(v ?? "")}
                   >
-                    <SelectTrigger className="bg-zinc-800 border-zinc-700">
+                    <SelectTrigger className="bg-white border-zinc-300 text-zinc-900">
                       <SelectValue placeholder="Selecciona un libro" />
                     </SelectTrigger>
                     <SelectContent>
@@ -219,7 +219,7 @@ export default function MediaPage() {
                       value={selectedChapter}
                       onValueChange={(v) => setSelectedChapter(v ?? "")}
                     >
-                      <SelectTrigger className="bg-zinc-800 border-zinc-700">
+                      <SelectTrigger className="bg-white border-zinc-300 text-zinc-900">
                         <SelectValue placeholder="Selecciona un capitulo" />
                       </SelectTrigger>
                       <SelectContent>
@@ -236,18 +236,18 @@ export default function MediaPage() {
 
               {/* Content area */}
               {!selectedBook ? (
-                <div className="bg-zinc-800/60 border border-zinc-700/50 rounded-xl p-8 text-center">
-                  <p className="text-zinc-400 mb-2">
+                <div className="bg-white border border-zinc-200 rounded-xl shadow-sm p-8 text-center">
+                  <p className="text-zinc-600 mb-2">
                     Selecciona un libro para ver los media moments
                   </p>
-                  <p className="text-sm text-zinc-600">
+                  <p className="text-sm text-zinc-400">
                     Los media moments son contenido multimedia que se inserta
                     entre los parrafos de los capitulos.
                   </p>
                 </div>
               ) : !selectedChapter ? (
-                <div className="bg-zinc-800/60 border border-zinc-700/50 rounded-xl p-8 text-center">
-                  <p className="text-zinc-400">
+                <div className="bg-white border border-zinc-200 rounded-xl shadow-sm p-8 text-center">
+                  <p className="text-zinc-600">
                     Selecciona un capitulo para ver sus media moments
                   </p>
                 </div>
@@ -271,14 +271,14 @@ export default function MediaPage() {
 
                   {/* New moment form */}
                   {showForm && (
-                    <div className="bg-zinc-800/60 border border-zinc-700/50 rounded-xl p-5 mb-6 space-y-4">
-                      <h3 className="font-semibold text-sm text-zinc-300">
+                    <div className="bg-white border border-zinc-200 rounded-xl shadow-sm p-5 mb-6 space-y-4">
+                      <h3 className="font-semibold text-sm text-zinc-700">
                         Crear nuevo media moment
                       </h3>
 
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
-                          <Label className="text-xs text-zinc-400">Tipo</Label>
+                          <Label className="text-xs text-zinc-500">Tipo</Label>
                           <Select
                             value={formData.mediaType}
                             onValueChange={(v) =>
@@ -288,7 +288,7 @@ export default function MediaPage() {
                               }))
                             }
                           >
-                            <SelectTrigger className="bg-zinc-800 border-zinc-700">
+                            <SelectTrigger className="bg-white border-zinc-300 text-zinc-900">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -300,7 +300,7 @@ export default function MediaPage() {
                           </Select>
                         </div>
                         <div>
-                          <Label className="text-xs text-zinc-400">
+                          <Label className="text-xs text-zinc-500">
                             Estilo de display
                           </Label>
                           <Select
@@ -312,7 +312,7 @@ export default function MediaPage() {
                               }))
                             }
                           >
-                            <SelectTrigger className="bg-zinc-800 border-zinc-700">
+                            <SelectTrigger className="bg-white border-zinc-300 text-zinc-900">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -325,7 +325,7 @@ export default function MediaPage() {
                           </Select>
                         </div>
                         <div>
-                          <Label className="text-xs text-zinc-400">
+                          <Label className="text-xs text-zinc-500">
                             Indice del parrafo (0-based)
                           </Label>
                           <Input
@@ -338,14 +338,14 @@ export default function MediaPage() {
                                   parseInt(e.target.value) || 0,
                               }))
                             }
-                            className="bg-zinc-800 border-zinc-700"
+                            className="bg-white border-zinc-300 text-zinc-900"
                           />
                         </div>
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                          <Label className="text-xs text-zinc-400">
+                          <Label className="text-xs text-zinc-500">
                             Titulo
                           </Label>
                           <Input
@@ -357,11 +357,11 @@ export default function MediaPage() {
                               }))
                             }
                             placeholder="Nombre del contenido"
-                            className="bg-zinc-800 border-zinc-700"
+                            className="bg-white border-zinc-300 text-zinc-900"
                           />
                         </div>
                         <div>
-                          <Label className="text-xs text-zinc-400">
+                          <Label className="text-xs text-zinc-500">
                             Media ID (opcional, se genera del titulo)
                           </Label>
                           <Input
@@ -373,13 +373,13 @@ export default function MediaPage() {
                               }))
                             }
                             placeholder="ej: track_01"
-                            className="bg-zinc-800 border-zinc-700"
+                            className="bg-white border-zinc-300 text-zinc-900"
                           />
                         </div>
                       </div>
 
                       <div>
-                        <Label className="text-xs text-zinc-400">
+                        <Label className="text-xs text-zinc-500">
                           URL del media
                         </Label>
                         <Input
@@ -391,13 +391,13 @@ export default function MediaPage() {
                             }))
                           }
                           placeholder="https://..."
-                          className="bg-zinc-800 border-zinc-700"
+                          className="bg-white border-zinc-300 text-zinc-900"
                         />
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                          <Label className="text-xs text-zinc-400">Orden</Label>
+                          <Label className="text-xs text-zinc-500">Orden</Label>
                           <Input
                             type="number"
                             value={formData.order}
@@ -407,11 +407,11 @@ export default function MediaPage() {
                                 order: parseInt(e.target.value) || 0,
                               }))
                             }
-                            className="bg-zinc-800 border-zinc-700"
+                            className="bg-white border-zinc-300 text-zinc-900"
                           />
                         </div>
                         <div>
-                          <Label className="text-xs text-zinc-400">
+                          <Label className="text-xs text-zinc-500">
                             Mensaje de desbloqueo (solo si exclusivo)
                           </Label>
                           <Input
@@ -423,7 +423,7 @@ export default function MediaPage() {
                               }))
                             }
                             placeholder="Texto que ve el usuario bloqueado"
-                            className="bg-zinc-800 border-zinc-700"
+                            className="bg-white border-zinc-300 text-zinc-900"
                           />
                         </div>
                       </div>
@@ -439,7 +439,7 @@ export default function MediaPage() {
                               }))
                             }
                           />
-                          <Label className="text-xs text-zinc-400">
+                          <Label className="text-xs text-zinc-500">
                             Exclusivo (bloqueado hasta completar capitulo)
                           </Label>
                         </div>
@@ -450,7 +450,7 @@ export default function MediaPage() {
                               setFormData((p) => ({ ...p, active: v }))
                             }
                           />
-                          <Label className="text-xs text-zinc-400">
+                          <Label className="text-xs text-zinc-500">
                             Activo
                           </Label>
                         </div>
@@ -476,7 +476,7 @@ export default function MediaPage() {
 
                   {/* Moments list */}
                   {!loadingMoments && moments.length === 0 && !showForm && (
-                    <div className="bg-zinc-800/60 border border-zinc-700/50 rounded-xl p-8 text-center">
+                    <div className="bg-white border border-zinc-200 rounded-xl shadow-sm p-8 text-center">
                       <p className="text-zinc-400 mb-2">
                         Este capitulo no tiene media moments
                       </p>
@@ -492,10 +492,10 @@ export default function MediaPage() {
                       {moments.map((m) => (
                         <div
                           key={m.id}
-                          className={`flex items-center gap-4 bg-zinc-900 border rounded-lg px-5 py-4 ${
+                          className={`flex items-center gap-4 bg-white border rounded-lg px-5 py-4 ${
                             m.active
-                              ? "border-zinc-700/50"
-                              : "border-zinc-700/50 opacity-60"
+                              ? "border-zinc-200"
+                              : "border-zinc-200 opacity-60"
                           }`}
                         >
                           <span className="text-amber-500/60 font-mono text-sm w-8">
@@ -505,8 +505,8 @@ export default function MediaPage() {
                             {mediaTypeLabel(m.mediaType)}
                           </Badge>
                           <div className="flex-1 min-w-0">
-                            <p className="font-medium truncate">{m.title}</p>
-                            <p className="text-xs text-zinc-500 truncate">
+                            <p className="font-medium text-zinc-900 truncate">{m.title}</p>
+                            <p className="text-xs text-zinc-400 truncate">
                               {m.mediaUrl || "Sin URL"}
                             </p>
                           </div>

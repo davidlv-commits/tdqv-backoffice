@@ -99,15 +99,15 @@ export default function MusicPage() {
     <AuthGuard>
       <div className="flex h-screen">
         <Sidebar />
-        <main className="flex-1 overflow-auto p-8">
-          <h2 className="text-2xl font-bold mb-6">Gestion de musica</h2>
+        <main className="flex-1 overflow-auto bg-slate-50 p-8">
+          <h2 className="text-2xl font-bold text-zinc-900 mb-6">Gestion de musica</h2>
 
           {loading ? (
             <p className="text-zinc-500">Cargando tracks...</p>
           ) : tracks.length === 0 ? (
-            <div className="bg-zinc-800/60 border border-zinc-700/50 rounded-xl p-8 text-center">
-              <p className="text-zinc-400 mb-2">No hay tracks en Firestore</p>
-              <p className="text-sm text-zinc-500">
+            <div className="bg-white border border-zinc-200 rounded-xl p-8 text-center shadow-sm">
+              <p className="text-zinc-600 mb-2">No hay tracks en Firestore</p>
+              <p className="text-sm text-zinc-400">
                 Necesitas migrar los tracks desde el codigo Flutter.
               </p>
             </div>
@@ -118,13 +118,13 @@ export default function MusicPage() {
                   {/* Track row */}
                   <div
                     onClick={() => handleExpand(track)}
-                    className={`flex items-center gap-4 bg-zinc-800/60 border rounded-lg px-5 py-4 cursor-pointer transition-colors ${
+                    className={`flex items-center gap-4 bg-white border rounded-lg px-5 py-4 cursor-pointer transition-all ${
                       expandedId === track.id
-                        ? "border-amber-500/50 rounded-b-none"
-                        : "border-zinc-700/50 hover:border-zinc-600"
+                        ? "border-amber-500/50 rounded-b-none shadow-sm"
+                        : "border-zinc-200 hover:border-zinc-300 hover:shadow-sm"
                     }`}
                   >
-                    <span className="text-amber-500/60 font-mono text-sm w-6">
+                    <span className="text-amber-600/60 font-mono text-sm w-6">
                       {track.order}
                     </span>
                     {track.coverUrl && (
@@ -135,8 +135,8 @@ export default function MusicPage() {
                       />
                     )}
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium truncate">{track.title}</p>
-                      <p className="text-sm text-zinc-400 truncate">
+                      <p className="font-medium text-zinc-900 truncate">{track.title}</p>
+                      <p className="text-sm text-zinc-500 truncate">
                         {track.artist} · {track.album}
                       </p>
                     </div>
@@ -181,49 +181,49 @@ export default function MusicPage() {
 
                   {/* Expanded edit form */}
                   {expandedId === track.id && (
-                    <div className="bg-zinc-800/40 border border-zinc-700/50 border-t-0 rounded-b-lg p-5 space-y-5">
+                    <div className="bg-zinc-50 border border-zinc-200 border-t-0 rounded-b-lg p-5 space-y-5">
                       {/* Basic info */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                          <Label className="text-xs text-zinc-400">Titulo</Label>
+                          <Label className="text-xs text-zinc-500">Titulo</Label>
                           <Input
                             value={editData.title || ""}
                             onChange={(e) => updateField("title", e.target.value)}
-                            className="bg-zinc-800 border-zinc-700"
+                            className="bg-white border-zinc-300 text-zinc-900"
                           />
                         </div>
                         <div>
-                          <Label className="text-xs text-zinc-400">Artista</Label>
+                          <Label className="text-xs text-zinc-500">Artista</Label>
                           <Input
                             value={editData.artist || ""}
                             onChange={(e) => updateField("artist", e.target.value)}
-                            className="bg-zinc-800 border-zinc-700"
+                            className="bg-white border-zinc-300 text-zinc-900"
                           />
                         </div>
                         <div>
-                          <Label className="text-xs text-zinc-400">Album</Label>
+                          <Label className="text-xs text-zinc-500">Album</Label>
                           <Input
                             value={editData.album || ""}
                             onChange={(e) => updateField("album", e.target.value)}
-                            className="bg-zinc-800 border-zinc-700"
+                            className="bg-white border-zinc-300 text-zinc-900"
                           />
                         </div>
                         <div>
-                          <Label className="text-xs text-zinc-400">Orden</Label>
+                          <Label className="text-xs text-zinc-500">Orden</Label>
                           <Input
                             type="number"
                             value={editData.order ?? 0}
                             onChange={(e) => updateField("order", parseInt(e.target.value) || 0)}
-                            className="bg-zinc-800 border-zinc-700"
+                            className="bg-white border-zinc-300 text-zinc-900"
                           />
                         </div>
                       </div>
 
                       {/* Audio preview */}
                       <div>
-                        <Label className="text-xs text-zinc-400 mb-2 block">Audio</Label>
+                        <Label className="text-xs text-zinc-500 mb-2 block">Audio</Label>
                         {editData.audioUrl ? (
-                          <div className="bg-zinc-900/60 border border-zinc-700/40 rounded-lg p-4 space-y-3">
+                          <div className="bg-white border border-zinc-200 rounded-lg p-4 space-y-3">
                             <audio
                               controls
                               src={editData.audioUrl}
@@ -234,18 +234,18 @@ export default function MusicPage() {
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                className="text-xs text-zinc-500 hover:text-zinc-300"
+                                className="text-xs text-zinc-400 hover:text-zinc-600"
                                 disabled
                               >
                                 Subir nuevo audio
                               </Button>
-                              <span className="text-xs text-zinc-600">(proximamente)</span>
+                              <span className="text-xs text-zinc-400">(proximamente)</span>
                             </div>
                           </div>
                         ) : (
-                          <div className="bg-zinc-900/60 border border-zinc-700/40 border-dashed rounded-lg p-4 text-center">
-                            <p className="text-sm text-zinc-500 mb-2">Sin audio asignado</p>
-                            <Button size="sm" variant="ghost" className="text-xs text-zinc-500" disabled>
+                          <div className="bg-white border border-zinc-200 border-dashed rounded-lg p-4 text-center">
+                            <p className="text-sm text-zinc-400 mb-2">Sin audio asignado</p>
+                            <Button size="sm" variant="ghost" className="text-xs text-zinc-400" disabled>
                               Subir audio (proximamente)
                             </Button>
                           </div>
@@ -254,9 +254,9 @@ export default function MusicPage() {
 
                       {/* Cover preview */}
                       <div>
-                        <Label className="text-xs text-zinc-400 mb-2 block">Portada</Label>
+                        <Label className="text-xs text-zinc-500 mb-2 block">Portada</Label>
                         {editData.coverUrl ? (
-                          <div className="bg-zinc-900/60 border border-zinc-700/40 rounded-lg p-4">
+                          <div className="bg-white border border-zinc-200 rounded-lg p-4">
                             <div className="flex items-start gap-4">
                               <img
                                 src={editData.coverUrl}
@@ -267,7 +267,7 @@ export default function MusicPage() {
                                 <Button
                                   size="sm"
                                   variant="ghost"
-                                  className="text-xs text-zinc-500 hover:text-zinc-300"
+                                  className="text-xs text-zinc-400 hover:text-zinc-600"
                                   disabled
                                 >
                                   Cambiar portada (proximamente)
@@ -276,9 +276,9 @@ export default function MusicPage() {
                             </div>
                           </div>
                         ) : (
-                          <div className="bg-zinc-900/60 border border-zinc-700/40 border-dashed rounded-lg p-4 text-center">
-                            <p className="text-sm text-zinc-500 mb-2">Sin portada</p>
-                            <Button size="sm" variant="ghost" className="text-xs text-zinc-500" disabled>
+                          <div className="bg-white border border-zinc-200 border-dashed rounded-lg p-4 text-center">
+                            <p className="text-sm text-zinc-400 mb-2">Sin portada</p>
+                            <Button size="sm" variant="ghost" className="text-xs text-zinc-400" disabled>
                               Subir portada (proximamente)
                             </Button>
                           </div>
@@ -287,25 +287,25 @@ export default function MusicPage() {
 
                       {/* Linked track */}
                       <div>
-                        <Label className="text-xs text-zinc-400">
+                        <Label className="text-xs text-zinc-500">
                           ID del track principal (si es instrumental)
                         </Label>
                         <Input
                           value={(editData.linkedMainTrackId as string) || ""}
                           onChange={(e) => updateField("linkedMainTrackId", e.target.value)}
                           placeholder="ej: track_01"
-                          className="bg-zinc-800 border-zinc-700"
+                          className="bg-white border-zinc-300 text-zinc-900"
                         />
                       </div>
 
                       {/* Lyrics */}
                       <div>
-                        <Label className="text-xs text-zinc-400 mb-1 block">Letra</Label>
+                        <Label className="text-xs text-zinc-500 mb-1 block">Letra</Label>
                         <Textarea
                           value={(editData.lyrics as string) || ""}
                           onChange={(e) => updateField("lyrics", e.target.value)}
                           placeholder="Escribe la letra de la cancion..."
-                          className="bg-zinc-800 border-zinc-700 font-mono text-sm min-h-[200px] p-4"
+                          className="bg-white border-zinc-300 text-zinc-900 font-mono text-sm min-h-[200px] p-4"
                           style={{ minHeight: "200px" }}
                         />
                       </div>
@@ -317,14 +317,14 @@ export default function MusicPage() {
                             checked={editData.isInstrumental || false}
                             onCheckedChange={(v) => updateField("isInstrumental", v)}
                           />
-                          <Label className="text-xs text-zinc-400">Instrumental</Label>
+                          <Label className="text-xs text-zinc-600">Instrumental</Label>
                         </div>
                         <div className="flex items-center gap-2">
                           <Switch
                             checked={editData.active || false}
                             onCheckedChange={(v) => updateField("active", v)}
                           />
-                          <Label className="text-xs text-zinc-400">Activo</Label>
+                          <Label className="text-xs text-zinc-600">Activo</Label>
                         </div>
                       </div>
 

@@ -30,11 +30,11 @@ export default function BookChapters() {
     <AuthGuard>
       <div className="flex h-screen">
         <Sidebar />
-        <main className="flex-1 overflow-auto p-8">
+        <main className="flex-1 overflow-auto bg-slate-50 p-8">
           <div className="flex items-center gap-3 mb-6">
-            <Link href="/books" className="text-zinc-500 hover:text-zinc-300">←</Link>
+            <Link href="/books" className="text-zinc-400 hover:text-zinc-600">←</Link>
             <div>
-              <h2 className="text-2xl font-bold">{BOOK_TITLES[bookId] || bookId}</h2>
+              <h2 className="text-2xl font-bold text-zinc-900">{BOOK_TITLES[bookId] || bookId}</h2>
               <p className="text-sm text-zinc-500">{chapters.length} capítulos</p>
             </div>
           </div>
@@ -42,9 +42,9 @@ export default function BookChapters() {
           {loading ? (
             <p className="text-zinc-500">Cargando capítulos...</p>
           ) : chapters.length === 0 ? (
-            <div className="bg-zinc-800/60 border border-zinc-700/50 rounded-xl p-8 text-center">
-              <p className="text-zinc-400 mb-2">No hay capítulos en Firestore</p>
-              <p className="text-sm text-zinc-500">
+            <div className="bg-white border border-zinc-200 rounded-xl p-8 text-center shadow-sm">
+              <p className="text-zinc-600 mb-2">No hay capítulos en Firestore</p>
+              <p className="text-sm text-zinc-400">
                 Necesitas migrar los capítulos desde los JSON locales. Usa el botón de importar.
               </p>
             </div>
@@ -54,21 +54,21 @@ export default function BookChapters() {
                 <Link
                   key={ch.id}
                   href={`/books/${bookId}/${ch.id}`}
-                  className="flex items-center justify-between bg-zinc-800/60 border border-zinc-700/50 rounded-lg px-5 py-4 hover:border-amber-500/30 transition-colors"
+                  className="flex items-center justify-between bg-white border border-zinc-200 rounded-lg px-5 py-4 hover:border-amber-500/40 hover:shadow-sm transition-all"
                 >
                   <div className="flex items-center gap-4">
-                    <span className="text-amber-500/60 font-mono text-sm w-8">
+                    <span className="text-amber-600/60 font-mono text-sm w-8">
                       {ch.order}
                     </span>
-                    <span className="font-medium">{ch.title}</span>
+                    <span className="font-medium text-zinc-900">{ch.title}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     {(ch.mediaMomentCount || 0) > 0 && (
-                      <Badge variant="outline" className="border-amber-500/30 text-amber-500">
+                      <Badge variant="outline" className="border-amber-500/30 text-amber-600">
                         {ch.mediaMomentCount} media
                       </Badge>
                     )}
-                    <span className="text-zinc-600 text-sm">
+                    <span className="text-zinc-400 text-sm">
                       {ch.paragraphCount || "?"} párrafos
                     </span>
                   </div>
