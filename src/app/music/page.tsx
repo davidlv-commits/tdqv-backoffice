@@ -192,6 +192,11 @@ export default function MusicPage() {
 
   const handleSave = async () => {
     if (!expandedId) return;
+    // Esperar a que terminen los uploads en curso.
+    if (uploadingAudio || uploadingCover) {
+      setSaveMsg("Esperando a que termine la subida...");
+      return;
+    }
     setSaving(true);
     try {
       const dataToSave: Partial<Track> & { id: string } = {
@@ -216,7 +221,8 @@ export default function MusicPage() {
       // Refrescar editData para que la preview use coverUrl de R2.
       setEditData(savedData);
       setEditAudioFile(null);
-      setEditCoverFile(null);
+      // Solo borrar coverFile si ya tenemos la URL de R2.
+      if (savedData.coverUrl) setEditCoverFile(null);
       setSaveMsg("Guardado ✓");
       setTimeout(() => setSaveMsg(""), 2000);
     } catch (e) {
