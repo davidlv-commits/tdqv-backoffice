@@ -433,23 +433,28 @@ export default function MusicPage() {
       setUploadingAudio(true);
       try {
         const url = await uploadFile(file, "tu-de-que-vas");
-        // Actualizar editData directamente para evitar closures stale.
         setEditData(prev => ({...prev, audioUrl: url}));
         setNewTrack(prev => ({...prev, audioUrl: url}));
         onAudioSelect(null);
-      } catch (e) { console.error("Audio upload error:", e); }
-      setUploadingAudio(false);
+      } catch (e) {
+        console.error("Audio upload error:", e);
+      } finally {
+        setUploadingAudio(false);
+      }
     };
 
     const handleCoverUpload = async (file: File) => {
-      onCoverSelect(file); // Mostrar preview local inmediatamente.
+      onCoverSelect(file);
       setUploadingCover(true);
       try {
         const url = await uploadFile(file, "covers");
         setEditData(prev => ({...prev, coverUrl: url}));
         setNewTrack(prev => ({...prev, coverUrl: url}));
-      } catch (e) { console.error("Cover upload error:", e); }
-      setUploadingCover(false);
+      } catch (e) {
+        console.error("Cover upload error:", e);
+      } finally {
+        setUploadingCover(false);
+      }
     };
 
     return (
@@ -868,26 +873,6 @@ export default function MusicPage() {
 
                               {/* 4. Lyrics */}
                               {renderLyricsSection(editData, updateField)}
-
-                              {/* Linked track (keep for backwards compat) */}
-                              <div>
-                                <Label className="text-xs text-zinc-500">
-                                  ID del track principal (si es instrumental)
-                                </Label>
-                                <Input
-                                  value={
-                                    (editData.linkedMainTrackId as string) || ""
-                                  }
-                                  onChange={(e) =>
-                                    updateField(
-                                      "linkedMainTrackId",
-                                      e.target.value
-                                    )
-                                  }
-                                  placeholder="ej: track_01"
-                                  className="bg-white border-zinc-300 text-zinc-900"
-                                />
-                              </div>
 
                               {/* 5. Status */}
                               {renderStatusSection(editData, updateField)}
