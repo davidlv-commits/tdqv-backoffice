@@ -50,4 +50,5 @@ export interface Track {
   order: number;
   active: boolean;
   lyrics?: string;
+  style?: string;
 }

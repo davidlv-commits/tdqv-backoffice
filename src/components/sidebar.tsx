@@ -1,18 +1,25 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { auth } from "@/lib/firebase";
 
-const NAV = [
-  { href: "/", label: "Dashboard", icon: "📊" },
+const MEDIA_ITEMS = [
   { href: "/books", label: "Libros", icon: "📚" },
   { href: "/music", label: "Música", icon: "🎵" },
-  { href: "/media", label: "Media", icon: "🎬" },
+  { href: "/images", label: "Imágenes", icon: "🖼️" },
+  { href: "/videos", label: "Vídeos", icon: "🎬" },
+  { href: "/audios", label: "Audios", icon: "🎙️" },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
+  const isMediaActive = MEDIA_ITEMS.some(
+    (item) =>
+      pathname === item.href || pathname.startsWith(item.href + "/")
+  );
+  const [mediaOpen, setMediaOpen] = useState(isMediaActive);
 
   return (
     <aside className="w-56 border-r border-zinc-800 bg-zinc-950 flex flex-col">
@@ -22,24 +29,66 @@ export function Sidebar() {
       </div>
 
       <nav className="flex-1 p-3 space-y-1">
-        {NAV.map((item) => {
-          const active = pathname === item.href ||
-            (item.href !== "/" && pathname.startsWith(item.href));
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-                active
-                  ? "bg-amber-500/10 text-amber-500"
-                  : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
-              }`}
-            >
-              <span>{item.icon}</span>
-              {item.label}
-            </Link>
-          );
-        })}
+        {/* Dashboard */}
+        <Link
+          href="/"
+          className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+            pathname === "/"
+              ? "bg-amber-500/10 text-amber-500"
+              : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
+          }`}
+        >
+          <span>📊</span>
+          Dashboard
+        </Link>
+
+        {/* Media section */}
+        <button
+          onClick={() => setMediaOpen(!mediaOpen)}
+          className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors w-full text-left ${
+            isMediaActive
+              ? "bg-amber-500/10 text-amber-500"
+              : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
+          }`}
+        >
+          <span>🎬</span>
+          <span className="flex-1">Media</span>
+          <svg
+            className={`w-3.5 h-3.5 transition-transform ${
+              mediaOpen ? "rotate-180" : ""
+            }`}
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+
+        {mediaOpen && (
+          <div className="ml-4 space-y-0.5">
+            {MEDIA_ITEMS.map((item) => {
+              const active =
+                pathname === item.href ||
+                (item.href !== "/" && pathname.startsWith(item.href + "/"));
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`flex items-center gap-3 px-3 py-1.5 rounded-lg text-sm transition-colors ${
+                    active
+                      ? "bg-amber-500/10 text-amber-500"
+                      : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
+                  }`}
+                >
+                  <span className="text-xs">{item.icon}</span>
+                  {item.label}
+                </Link>
+              );
+            })}
+          </div>
+        )}
       </nav>
 
       <div className="p-3 border-t border-zinc-800">
