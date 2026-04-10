@@ -49,7 +49,7 @@ export function ChapterRichEditor({
   const [selectedTrackId, setSelectedTrackId] = useState("");
   const [autoplay, setAutoplay] = useState(false);
   const [initialVolume, setInitialVolume] = useState(0.3);
-  const [crossfadeTrackId, setCrossfadeTrackId] = useState("");
+  const [crossfadeFromPrevious, setCrossfadeFromPrevious] = useState(false);
 
   useEffect(() => {
     getTracks().then(setAvailableTracks);
@@ -141,7 +141,6 @@ export function ChapterRichEditor({
     if (!track) return;
 
     const mType = selectedMediaType || "music";
-    const crossfadeTrack = crossfadeTrackId ? availableTracks.find(t => t.id === crossfadeTrackId) : null;
 
     editor
       .chain()
@@ -157,8 +156,8 @@ export function ChapterRichEditor({
           displayStyle: autoplay ? "ambient" : "inline",
           autoplay,
           initialVolume,
-          crossfadeWithId: crossfadeTrackId,
-          crossfadeWithTitle: crossfadeTrack?.title || "",
+          crossfadeWithId: crossfadeFromPrevious ? "__previous__" : "",
+          crossfadeWithTitle: crossfadeFromPrevious ? "Fundido desde la pista anterior" : "",
         },
       })
       .run();
@@ -167,8 +166,8 @@ export function ChapterRichEditor({
     setSelectedTrackId("");
     setAutoplay(false);
     setInitialVolume(0.3);
-    setCrossfadeTrackId("");
-  }, [editor, selectedTrackId, availableTracks, autoplay, initialVolume, crossfadeTrackId, selectedMediaType]);
+    setCrossfadeFromPrevious(false);
+  }, [editor, selectedTrackId, availableTracks, autoplay, initialVolume, crossfadeFromPrevious, selectedMediaType]);
 
   return (
     <div>
@@ -268,23 +267,16 @@ export function ChapterRichEditor({
                 </div>
               )}
 
-              {/* Crossfade */}
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-zinc-500">Crossfade →</span>
-                <Select value={crossfadeTrackId} onValueChange={(v) => setCrossfadeTrackId(v || "")}>
-                  <SelectTrigger className="bg-white border-zinc-300 text-zinc-900 h-8 w-48 text-xs">
-                    <SelectValue placeholder="Ninguno" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">Ninguno</SelectItem>
-                    {availableTracks
-                      .filter(t => t.id !== selectedTrackId && !t.isInstrumental)
-                      .map((t) => (
-                        <SelectItem key={t.id} value={t.id}>{t.title}</SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {/* Crossfade desde pista anterior */}
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={crossfadeFromPrevious}
+                  onChange={(e) => setCrossfadeFromPrevious(e.target.checked)}
+                  className="w-4 h-4 rounded border-zinc-300 text-pink-600 focus:ring-pink-500"
+                />
+                <span className="text-xs text-zinc-700 font-medium">Fundido desde la pista anterior</span>
+              </label>
             </div>
           )}
 
@@ -301,7 +293,7 @@ export function ChapterRichEditor({
             <Button
               size="sm"
               variant="ghost"
-              onClick={() => { setShowInsert(false); setSelectedTrackId(""); setSelectedMediaType(""); setAutoplay(false); setCrossfadeTrackId(""); }}
+              onClick={() => { setShowInsert(false); setSelectedTrackId(""); setSelectedMediaType(""); setAutoplay(false); setCrossfadeFromPrevious(false); }}
               className="h-9 text-zinc-500"
           >
             ✕
