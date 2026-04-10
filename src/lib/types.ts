@@ -54,6 +54,8 @@ export interface Track {
   active: boolean;
   lyrics?: string;
   style?: string;
+  /** false = solo banda sonora de fondo (no aparece en el reproductor). Default true. */
+  showInLibrary?: boolean;
   lockedUntilChapter?: string;
   lockedUntilChapterTitle?: string;
   isLockedByChapter?: boolean;

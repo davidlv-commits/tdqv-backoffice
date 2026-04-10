@@ -59,6 +59,7 @@ export default function MusicPage() {
     order: 0,
     isInstrumental: false,
     active: true,
+    showInLibrary: true,
     style: "",
     lyrics: "",
     lockedUntilChapter: "",
@@ -181,6 +182,7 @@ export default function MusicPage() {
         lyrics: track.lyrics || "",
         linkedMainTrackId: track.linkedMainTrackId || "",
         style: track.style || "",
+        showInLibrary: track.showInLibrary !== false,
         lockedUntilChapter: track.lockedUntilChapter || "",
         lockedUntilChapterTitle: track.lockedUntilChapterTitle || "",
         isLockedByChapter: track.isLockedByChapter || false,
@@ -269,6 +271,7 @@ export default function MusicPage() {
         order: newTrack.order || 0,
         isInstrumental: newTrack.isInstrumental || false,
         active: newTrack.active ?? true,
+        showInLibrary: newTrack.showInLibrary !== false,
         style: newTrack.style || "",
         lyrics: newTrack.lyrics || "",
         createdAt: Timestamp.now(),
@@ -668,6 +671,15 @@ export default function MusicPage() {
               onCheckedChange={(v) => setField("isInstrumental", v)}
             />
             <Label className="text-xs text-zinc-600">Instrumental</Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <Switch
+              checked={data.showInLibrary !== false}
+              onCheckedChange={(v) => setField("showInLibrary", v)}
+            />
+            <Label className="text-xs text-zinc-600">
+              {data.showInLibrary !== false ? "Visible en reproductor" : "Solo banda sonora"}
+            </Label>
           </div>
         </div>
       </div>
