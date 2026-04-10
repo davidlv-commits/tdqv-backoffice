@@ -411,7 +411,8 @@ export default function MusicPage() {
     audioInputRef: React.RefObject<HTMLInputElement | null>,
     coverInputRef: React.RefObject<HTMLInputElement | null>,
     onAudioSelect: (file: File | null) => void,
-    onCoverSelect: (file: File | null) => void
+    onCoverSelect: (file: File | null) => void,
+    onFieldChange?: (key: string, value: string) => void
   ) {
     return (
       <div>
@@ -533,13 +534,17 @@ export default function MusicPage() {
                     <span className="text-xs">Subir portada</span>
                   </button>
                 )}
-                <div className="flex-1 space-y-1 pt-2">
-                  <p className="text-xs text-zinc-400">
-                    Haz clic en la imagen o en el area para seleccionar una portada.
-                  </p>
-                  <p className="text-xs text-zinc-400">
-                    Se mostrara a 120x120px. La subida a R2 se implementara proximamente.
-                  </p>
+                <div className="flex-1 space-y-2 pt-2">
+                  <div>
+                    <label className="text-[10px] text-zinc-400 block mb-1">URL de la portada</label>
+                    <input
+                      type="text"
+                      value={data.coverUrl || ""}
+                      onChange={e => onFieldChange?.("coverUrl", e.target.value)}
+                      placeholder="https://... o pega un enlace de imagen"
+                      className="w-full h-8 text-xs rounded-md border border-zinc-300 bg-white text-zinc-900 px-2"
+                    />
+                  </div>
                   {coverFile && (
                     <button
                       type="button"
@@ -716,7 +721,8 @@ export default function MusicPage() {
                 newAudioRef,
                 newCoverRef,
                 setNewAudioFile,
-                setNewCoverFile
+                setNewCoverFile,
+                (k, v) => setNewTrack(p => ({...p, [k]: v}))
               )}
 
               {/* 3. Chapter */}
@@ -900,7 +906,8 @@ export default function MusicPage() {
                                 editAudioRef,
                                 editCoverRef,
                                 setEditAudioFile,
-                                setEditCoverFile
+                                setEditCoverFile,
+                                (k, v) => setEditData(p => ({...p, [k]: v}))
                               )}
 
                               {/* 3. Chapter */}
