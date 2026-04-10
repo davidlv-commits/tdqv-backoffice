@@ -211,10 +211,11 @@ export default function MusicPage() {
       setTracks((prev) =>
         prev.map((t) => (t.id === expandedId ? { ...t, ...editData } : t))
       );
-      setExpandedId(null);
-      setEditData({});
+      // No cerrar la edición — mostrar confirmación.
       setEditAudioFile(null);
       setEditCoverFile(null);
+      setSaveMsg("Guardado ✓");
+      setTimeout(() => setSaveMsg(""), 2000);
     } catch (e) {
       console.error("Error saving track:", e);
     } finally {
@@ -407,6 +408,7 @@ export default function MusicPage() {
 
   const [uploadingAudio, setUploadingAudio] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
+  const [saveMsg, setSaveMsg] = useState("");
 
   function renderFilesSection(
     data: Partial<Track>,
@@ -422,9 +424,11 @@ export default function MusicPage() {
       setUploadingAudio(true);
       try {
         const url = await uploadFile(file, "tu-de-que-vas");
-        onFieldChange?.("audioUrl", url);
+        // Actualizar editData directamente para evitar closures stale.
+        setEditData(prev => ({...prev, audioUrl: url}));
+        setNewTrack(prev => ({...prev, audioUrl: url}));
         onAudioSelect(null);
-      } catch { /* error silencioso */ }
+      } catch (e) { console.error("Audio upload error:", e); }
       setUploadingAudio(false);
     };
 
@@ -432,9 +436,11 @@ export default function MusicPage() {
       setUploadingCover(true);
       try {
         const url = await uploadFile(file, "covers");
-        onFieldChange?.("coverUrl", url);
+        // Actualizar editData directamente.
+        setEditData(prev => ({...prev, coverUrl: url}));
+        setNewTrack(prev => ({...prev, coverUrl: url}));
         onCoverSelect(null);
-      } catch { /* error silencioso */ }
+      } catch (e) { console.error("Cover upload error:", e); }
       setUploadingCover(false);
     };
 
@@ -889,6 +895,7 @@ export default function MusicPage() {
                                     ? "Guardando..."
                                     : "Guardar cambios"}
                                 </Button>
+                                {saveMsg && <span className="text-green-600 text-sm ml-2">{saveMsg}</span>}
                                 <Button
                                   variant="ghost"
                                   onClick={() => {
