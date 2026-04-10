@@ -51,4 +51,7 @@ export interface Track {
   active: boolean;
   lyrics?: string;
   style?: string;
+  lockedUntilChapter?: string;  // chapter ID that unlocks this track
+  lockedUntilChapterTitle?: string;  // chapter title for display
+  isLockedByChapter?: boolean;  // whether track is locked until chapter is read
 }

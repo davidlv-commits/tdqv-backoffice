@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { AuthGuard } from "@/components/auth-guard";
 import { Sidebar } from "@/components/sidebar";
 import { Button } from "@/components/ui/button";
@@ -9,10 +9,23 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { getTracks, saveTrack, deleteTrack } from "@/lib/firestore";
-import type { Track } from "@/lib/types";
+import { getTracks, saveTrack, deleteTrack, getBooks, getChapters } from "@/lib/firestore";
+import type { Track, Chapter, Book } from "@/lib/types";
 import { addDoc, collection, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+
+// Chapter with book info for display
+interface ChapterOption {
+  id: string;
+  bookId: string;
+  bookTitle: string;
+  bookNumber: number; // 1 or 2
+  order: number;
+  title: string;
+  label: string; // "Libro I . Cap 6 . El encuentro"
+}
+
+const DEFAULT_STYLES = ["Pop", "Rock", "Balada", "Jazz", "Instrumental", "Acustico", "Flamenco"];
 
 export default function MusicPage() {
   const [tracks, setTracks] = useState<Track[]>([]);
@@ -22,8 +35,17 @@ export default function MusicPage() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
 
+  // Chapters for association
+  const [chapterOptions, setChapterOptions] = useState<ChapterOption[]>([]);
+
   // Album collapse state
   const [collapsedAlbums, setCollapsedAlbums] = useState<Set<string>>(new Set());
+
+  // File picker refs for edit form
+  const editAudioRef = useRef<HTMLInputElement>(null);
+  const editCoverRef = useRef<HTMLInputElement>(null);
+  const [editAudioFile, setEditAudioFile] = useState<File | null>(null);
+  const [editCoverFile, setEditCoverFile] = useState<File | null>(null);
 
   // New track form
   const [showNewForm, setShowNewForm] = useState(false);
@@ -38,9 +60,17 @@ export default function MusicPage() {
     active: true,
     style: "",
     lyrics: "",
+    lockedUntilChapter: "",
+    lockedUntilChapterTitle: "",
+    isLockedByChapter: false,
   });
   const [creatingTrack, setCreatingTrack] = useState(false);
+  const newAudioRef = useRef<HTMLInputElement>(null);
+  const newCoverRef = useRef<HTMLInputElement>(null);
+  const [newAudioFile, setNewAudioFile] = useState<File | null>(null);
+  const [newCoverFile, setNewCoverFile] = useState<File | null>(null);
 
+  // Load tracks
   useEffect(() => {
     getTracks()
       .then((t) => {
@@ -50,15 +80,64 @@ export default function MusicPage() {
       .catch(() => setLoading(false));
   }, []);
 
+  // Load chapters from both books
+  useEffect(() => {
+    async function loadChapters() {
+      try {
+        const books = await getBooks();
+        const allOptions: ChapterOption[] = [];
+
+        for (const book of books) {
+          const bookNum = book.id === "book1" ? 1 : book.id === "book2" ? 2 : parseInt(book.id.replace("book", "")) || 0;
+          const romanNum = bookNum === 1 ? "I" : bookNum === 2 ? "II" : `${bookNum}`;
+          const chapters = await getChapters(book.id);
+          for (const ch of chapters) {
+            allOptions.push({
+              id: ch.id,
+              bookId: book.id,
+              bookTitle: book.title,
+              bookNumber: bookNum,
+              order: ch.order,
+              title: ch.title,
+              label: `Libro ${romanNum} \u00B7 Cap ${ch.order} \u00B7 ${ch.title}`,
+            });
+          }
+        }
+
+        allOptions.sort((a, b) => a.bookNumber - b.bookNumber || a.order - b.order);
+        setChapterOptions(allOptions);
+      } catch (e) {
+        console.error("Error loading chapters:", e);
+      }
+    }
+    loadChapters();
+  }, []);
+
+  // Compute unique albums and styles from existing tracks
+  const existingAlbums = useMemo(() => {
+    const albums = new Set<string>();
+    for (const t of tracks) {
+      if (t.album) albums.add(t.album);
+    }
+    return Array.from(albums).sort();
+  }, [tracks]);
+
+  const existingStyles = useMemo(() => {
+    const styles = new Set<string>(DEFAULT_STYLES);
+    for (const t of tracks) {
+      if (t.style) styles.add(t.style);
+    }
+    return Array.from(styles).sort();
+  }, [tracks]);
+
   // Group tracks by album
   const albumGroups = useMemo(() => {
     const groups: Record<string, Track[]> = {};
     for (const track of tracks) {
-      const album = track.album || "Sin álbum";
+      const album = track.album || "Sin album";
       if (!groups[album]) groups[album] = [];
       groups[album].push(track);
     }
-    // Sort albums: non-instrumental first, then instrumental
     const sorted = Object.entries(groups).sort(([a], [b]) => {
       const aIsInstr = a.toLowerCase().includes("instrumental");
       const bIsInstr = b.toLowerCase().includes("instrumental");
@@ -85,6 +164,8 @@ export default function MusicPage() {
     if (expandedId === track.id) {
       setExpandedId(null);
       setEditData({});
+      setEditAudioFile(null);
+      setEditCoverFile(null);
     } else {
       setExpandedId(track.id);
       setEditData({
@@ -99,7 +180,12 @@ export default function MusicPage() {
         lyrics: track.lyrics || "",
         linkedMainTrackId: track.linkedMainTrackId || "",
         style: track.style || "",
+        lockedUntilChapter: track.lockedUntilChapter || "",
+        lockedUntilChapterTitle: track.lockedUntilChapterTitle || "",
+        isLockedByChapter: track.isLockedByChapter || false,
       });
+      setEditAudioFile(null);
+      setEditCoverFile(null);
     }
   };
 
@@ -114,6 +200,11 @@ export default function MusicPage() {
       if (!dataToSave.lyrics) delete dataToSave.lyrics;
       if (!dataToSave.linkedMainTrackId) delete dataToSave.linkedMainTrackId;
       if (!dataToSave.style) delete dataToSave.style;
+      if (!dataToSave.lockedUntilChapter) {
+        delete dataToSave.lockedUntilChapter;
+        delete dataToSave.lockedUntilChapterTitle;
+        dataToSave.isLockedByChapter = false;
+      }
 
       await saveTrack(dataToSave);
       setTracks((prev) =>
@@ -121,6 +212,8 @@ export default function MusicPage() {
       );
       setExpandedId(null);
       setEditData({});
+      setEditAudioFile(null);
+      setEditCoverFile(null);
     } catch (e) {
       console.error("Error saving track:", e);
     } finally {
@@ -149,7 +242,7 @@ export default function MusicPage() {
     if (!newTrack.title) return;
     setCreatingTrack(true);
     try {
-      const docRef = await addDoc(collection(db, "tracks"), {
+      const docData: Record<string, unknown> = {
         title: newTrack.title,
         artist: newTrack.artist || "",
         album: newTrack.album || "",
@@ -161,7 +254,14 @@ export default function MusicPage() {
         style: newTrack.style || "",
         lyrics: newTrack.lyrics || "",
         createdAt: Timestamp.now(),
-      });
+      };
+      if (newTrack.isLockedByChapter && newTrack.lockedUntilChapter) {
+        docData.lockedUntilChapter = newTrack.lockedUntilChapter;
+        docData.lockedUntilChapterTitle = newTrack.lockedUntilChapterTitle || "";
+        docData.isLockedByChapter = true;
+      }
+
+      const docRef = await addDoc(collection(db, "tracks"), docData);
       const created: Track = {
         id: docRef.id,
         title: newTrack.title || "",
@@ -174,6 +274,9 @@ export default function MusicPage() {
         active: newTrack.active ?? true,
         style: newTrack.style || "",
         lyrics: newTrack.lyrics || "",
+        lockedUntilChapter: newTrack.lockedUntilChapter || "",
+        lockedUntilChapterTitle: newTrack.lockedUntilChapterTitle || "",
+        isLockedByChapter: newTrack.isLockedByChapter || false,
       };
       setTracks((prev) => [...prev, created].sort((a, b) => a.order - b.order));
       setShowNewForm(false);
@@ -188,7 +291,12 @@ export default function MusicPage() {
         active: true,
         style: "",
         lyrics: "",
+        lockedUntilChapter: "",
+        lockedUntilChapterTitle: "",
+        isLockedByChapter: false,
       });
+      setNewAudioFile(null);
+      setNewCoverFile(null);
     } catch (e) {
       console.error("Error creating track:", e);
     } finally {
@@ -200,6 +308,374 @@ export default function MusicPage() {
     setEditData((prev) => ({ ...prev, [key]: value }));
   };
 
+  // Helper: handle chapter selection for edit form
+  const handleEditChapterChange = (chapterId: string) => {
+    const chapter = chapterOptions.find((c) => c.id === chapterId);
+    setEditData((prev) => ({
+      ...prev,
+      lockedUntilChapter: chapterId,
+      lockedUntilChapterTitle: chapter?.label || "",
+    }));
+  };
+
+  // Helper: handle chapter selection for new form
+  const handleNewChapterChange = (chapterId: string) => {
+    const chapter = chapterOptions.find((c) => c.id === chapterId);
+    setNewTrack((prev) => ({
+      ...prev,
+      lockedUntilChapter: chapterId,
+      lockedUntilChapterTitle: chapter?.label || "",
+    }));
+  };
+
+  // ---- Shared form section renderers ----
+
+  function renderBasicInfoSection(
+    data: Partial<Track>,
+    setField: (key: keyof Track, value: string | number | boolean) => void,
+    albumListId: string,
+    styleListId: string
+  ) {
+    return (
+      <div>
+        <h4 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3">
+          Informacion basica
+        </h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <Label className="text-xs text-zinc-500">Titulo *</Label>
+            <Input
+              value={data.title || ""}
+              onChange={(e) => setField("title", e.target.value)}
+              placeholder="Nombre de la cancion"
+              className="bg-white border-zinc-300 text-zinc-900"
+            />
+          </div>
+          <div>
+            <Label className="text-xs text-zinc-500">Artista</Label>
+            <Input
+              value={data.artist || ""}
+              onChange={(e) => setField("artist", e.target.value)}
+              placeholder="David Bello"
+              className="bg-white border-zinc-300 text-zinc-900"
+            />
+          </div>
+          <div>
+            <Label className="text-xs text-zinc-500">Album</Label>
+            <Input
+              list={albumListId}
+              value={data.album || ""}
+              onChange={(e) => setField("album", e.target.value)}
+              placeholder="Escribe o selecciona un album"
+              className="bg-white border-zinc-300 text-zinc-900"
+            />
+            <datalist id={albumListId}>
+              {existingAlbums.map((a) => (
+                <option key={a} value={a} />
+              ))}
+            </datalist>
+          </div>
+          <div>
+            <Label className="text-xs text-zinc-500">Estilo / Genero</Label>
+            <Input
+              list={styleListId}
+              value={(data.style as string) || ""}
+              onChange={(e) => setField("style", e.target.value)}
+              placeholder="Escribe o selecciona un estilo"
+              className="bg-white border-zinc-300 text-zinc-900"
+            />
+            <datalist id={styleListId}>
+              {existingStyles.map((s) => (
+                <option key={s} value={s} />
+              ))}
+            </datalist>
+          </div>
+          <div>
+            <Label className="text-xs text-zinc-500">Orden</Label>
+            <Input
+              type="number"
+              value={data.order ?? 0}
+              onChange={(e) => setField("order", parseInt(e.target.value) || 0)}
+              className="bg-white border-zinc-300 text-zinc-900"
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  function renderFilesSection(
+    data: Partial<Track>,
+    audioFile: File | null,
+    coverFile: File | null,
+    audioInputRef: React.RefObject<HTMLInputElement | null>,
+    coverInputRef: React.RefObject<HTMLInputElement | null>,
+    onAudioSelect: (file: File | null) => void,
+    onCoverSelect: (file: File | null) => void
+  ) {
+    return (
+      <div>
+        <h4 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3">
+          Archivos
+        </h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Audio upload */}
+          <div>
+            <Label className="text-xs text-zinc-500 mb-2 block">Audio</Label>
+            <div className="bg-white border border-zinc-200 rounded-lg p-4 space-y-3">
+              {data.audioUrl && !audioFile ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-green-600 text-sm font-medium">Audio cargado</span>
+                  <span className="text-xs text-zinc-400 truncate max-w-[200px]">
+                    {data.audioUrl.split("/").pop()}
+                  </span>
+                  <audio
+                    controls
+                    src={data.audioUrl}
+                    className="w-full h-8 mt-2"
+                    preload="none"
+                  />
+                </div>
+              ) : audioFile ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-amber-600 text-sm font-medium">Archivo seleccionado</span>
+                  <span className="text-xs text-zinc-500 truncate">{audioFile.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => onAudioSelect(null)}
+                    className="text-xs text-red-400 hover:text-red-600 ml-auto"
+                  >
+                    Quitar
+                  </button>
+                </div>
+              ) : null}
+              <input
+                ref={audioInputRef}
+                type="file"
+                accept=".m4a,.mp3,audio/mpeg,audio/mp4"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0] || null;
+                  onAudioSelect(file);
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => audioInputRef.current?.click()}
+                className="w-full border-2 border-dashed border-zinc-300 rounded-lg py-3 px-4 text-sm text-zinc-500 hover:border-amber-400 hover:text-amber-600 transition-colors flex items-center justify-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
+                Subir audio (.m4a, .mp3)
+              </button>
+              <p className="text-xs text-zinc-400">
+                La subida a R2 se implementara proximamente. Por ahora solo seleccion de archivo.
+              </p>
+            </div>
+          </div>
+
+          {/* Cover image */}
+          <div>
+            <Label className="text-xs text-zinc-500 mb-2 block">Portada</Label>
+            <div className="bg-white border border-zinc-200 rounded-lg p-4">
+              <input
+                ref={coverInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0] || null;
+                  onCoverSelect(file);
+                }}
+              />
+              <div className="flex items-start gap-4">
+                {/* Cover preview or placeholder */}
+                {data.coverUrl && !coverFile ? (
+                  <button
+                    type="button"
+                    onClick={() => coverInputRef.current?.click()}
+                    className="relative group flex-shrink-0"
+                  >
+                    <img
+                      src={data.coverUrl}
+                      alt="Portada"
+                      className="w-[120px] h-[120px] rounded-lg object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black/40 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <span className="text-white text-xs font-medium">Cambiar</span>
+                    </div>
+                  </button>
+                ) : coverFile ? (
+                  <button
+                    type="button"
+                    onClick={() => coverInputRef.current?.click()}
+                    className="relative group flex-shrink-0"
+                  >
+                    <img
+                      src={URL.createObjectURL(coverFile)}
+                      alt="Preview"
+                      className="w-[120px] h-[120px] rounded-lg object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black/40 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <span className="text-white text-xs font-medium">Cambiar</span>
+                    </div>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => coverInputRef.current?.click()}
+                    className="w-[120px] h-[120px] rounded-lg border-2 border-dashed border-zinc-300 flex flex-col items-center justify-center flex-shrink-0 hover:border-amber-400 hover:text-amber-600 transition-colors text-zinc-400"
+                  >
+                    <svg className="w-6 h-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5a2.25 2.25 0 002.25-2.25V6.75a2.25 2.25 0 00-2.25-2.25H3.75A2.25 2.25 0 001.5 6.75v10.5A2.25 2.25 0 003.75 21z" />
+                    </svg>
+                    <span className="text-xs">Subir portada</span>
+                  </button>
+                )}
+                <div className="flex-1 space-y-1 pt-2">
+                  <p className="text-xs text-zinc-400">
+                    Haz clic en la imagen o en el area para seleccionar una portada.
+                  </p>
+                  <p className="text-xs text-zinc-400">
+                    Se mostrara a 120x120px. La subida a R2 se implementara proximamente.
+                  </p>
+                  {coverFile && (
+                    <button
+                      type="button"
+                      onClick={() => onCoverSelect(null)}
+                      className="text-xs text-red-400 hover:text-red-600"
+                    >
+                      Quitar imagen seleccionada
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  function renderChapterSection(
+    data: Partial<Track>,
+    onChapterChange: (chapterId: string) => void,
+    onLockChange: (locked: boolean) => void
+  ) {
+    return (
+      <div>
+        <h4 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3">
+          Capitulo
+        </h4>
+        <div className="bg-white border border-zinc-200 rounded-lg p-4 space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label className="text-xs text-zinc-500">Capitulo asociado</Label>
+              <select
+                value={data.lockedUntilChapter || ""}
+                onChange={(e) => onChapterChange(e.target.value)}
+                className="w-full h-9 rounded-md border border-zinc-300 bg-white text-zinc-900 text-sm px-3 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+              >
+                <option value="">Sin capitulo asociado</option>
+                {chapterOptions.map((ch) => (
+                  <option key={`${ch.bookId}-${ch.id}`} value={ch.id}>
+                    {ch.label}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-zinc-400 mt-1">
+                Se rellena automaticamente al insertar media en el editor de capitulos.
+              </p>
+            </div>
+            <div className="flex items-end">
+              <label className="flex items-center gap-2 cursor-pointer pb-1">
+                <input
+                  type="checkbox"
+                  checked={data.isLockedByChapter || false}
+                  onChange={(e) => onLockChange(e.target.checked)}
+                  disabled={!data.lockedUntilChapter}
+                  className="w-4 h-4 rounded border-zinc-300 text-amber-600 focus:ring-amber-500 disabled:opacity-40"
+                />
+                <span className={`text-xs font-medium ${data.lockedUntilChapter ? "text-zinc-700" : "text-zinc-400"}`}>
+                  Bloquear hasta leer el capitulo
+                </span>
+              </label>
+            </div>
+          </div>
+          {data.isLockedByChapter && data.lockedUntilChapter && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+              <p className="text-xs text-amber-700">
+                Mensaje al usuario: &quot;Para escuchar esta cancion necesitas leer el capitulo{" "}
+                <strong>{data.lockedUntilChapterTitle || data.lockedUntilChapter}</strong>&quot;
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  function renderLyricsSection(
+    data: Partial<Track>,
+    setField: (key: keyof Track, value: string | number | boolean) => void
+  ) {
+    return (
+      <div>
+        <h4 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3">
+          Letra
+        </h4>
+        <Textarea
+          value={(data.lyrics as string) || ""}
+          onChange={(e) => setField("lyrics", e.target.value)}
+          placeholder="Escribe la letra de la cancion..."
+          className="bg-white border-zinc-300 text-zinc-900 font-mono text-sm min-h-[200px] p-4"
+          style={{ minHeight: "200px" }}
+        />
+        <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <p className="text-xs text-blue-700">
+            <strong>Formato LRC para letras sincronizadas:</strong>{" "}
+            <code className="bg-blue-100 px-1 rounded">
+              [00:12.34] Linea de la letra
+            </code>
+          </p>
+          <p className="text-xs text-blue-600 mt-1">
+            Cada linea empieza con el timestamp entre corchetes [mm:ss.cc] seguido del texto.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  function renderStatusSection(
+    data: Partial<Track>,
+    setField: (key: keyof Track, value: string | number | boolean) => void
+  ) {
+    return (
+      <div>
+        <h4 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3">
+          Estado
+        </h4>
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-2">
+            <Switch
+              checked={data.active || false}
+              onCheckedChange={(v) => setField("active", v)}
+            />
+            <Label className="text-xs text-zinc-600">Activo</Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <Switch
+              checked={data.isInstrumental || false}
+              onCheckedChange={(v) => setField("isInstrumental", v)}
+            />
+            <Label className="text-xs text-zinc-600">Instrumental</Label>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <AuthGuard>
       <div className="flex h-screen">
@@ -207,139 +683,60 @@ export default function MusicPage() {
         <main className="flex-1 overflow-auto bg-slate-50 p-8">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold text-zinc-900">
-              Gestión de música
+              Gestion de musica
             </h2>
             <Button
               onClick={() => setShowNewForm(!showNewForm)}
               className="bg-amber-600 hover:bg-amber-700"
             >
-              {showNewForm ? "Cancelar" : "+ Subir nueva canción"}
+              {showNewForm ? "Cancelar" : "+ Subir nueva cancion"}
             </Button>
           </div>
 
           {/* New track form */}
           {showNewForm && (
-            <div className="bg-white border border-zinc-200 rounded-xl shadow-sm p-5 mb-6 space-y-4">
+            <div className="bg-white border border-zinc-200 rounded-xl shadow-sm p-5 mb-6 space-y-6">
               <h3 className="font-semibold text-sm text-zinc-700">
-                Nueva canción
+                Nueva cancion
               </h3>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-xs text-zinc-500">Título *</Label>
-                  <Input
-                    value={newTrack.title || ""}
-                    onChange={(e) =>
-                      setNewTrack((p) => ({ ...p, title: e.target.value }))
-                    }
-                    placeholder="Nombre de la canción"
-                    className="bg-white border-zinc-300 text-zinc-900"
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs text-zinc-500">Artista</Label>
-                  <Input
-                    value={newTrack.artist || ""}
-                    onChange={(e) =>
-                      setNewTrack((p) => ({ ...p, artist: e.target.value }))
-                    }
-                    placeholder="David Bello"
-                    className="bg-white border-zinc-300 text-zinc-900"
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs text-zinc-500">Álbum</Label>
-                  <Input
-                    value={newTrack.album || ""}
-                    onChange={(e) =>
-                      setNewTrack((p) => ({ ...p, album: e.target.value }))
-                    }
-                    placeholder="Nombre del álbum"
-                    className="bg-white border-zinc-300 text-zinc-900"
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs text-zinc-500">Estilo / Género</Label>
-                  <Input
-                    value={newTrack.style || ""}
-                    onChange={(e) =>
-                      setNewTrack((p) => ({ ...p, style: e.target.value }))
-                    }
-                    placeholder="ej: Pop, Rock, Balada..."
-                    className="bg-white border-zinc-300 text-zinc-900"
-                  />
-                </div>
-              </div>
+              {/* 1. Basic info */}
+              {renderBasicInfoSection(
+                newTrack,
+                (key, val) => setNewTrack((p) => ({ ...p, [key]: val })),
+                "new-album-list",
+                "new-style-list"
+              )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-xs text-zinc-500">URL del audio</Label>
-                  <Input
-                    value={newTrack.audioUrl || ""}
-                    onChange={(e) =>
-                      setNewTrack((p) => ({ ...p, audioUrl: e.target.value }))
-                    }
-                    placeholder="https://..."
-                    className="bg-white border-zinc-300 text-zinc-900"
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs text-zinc-500">URL de portada</Label>
-                  <Input
-                    value={newTrack.coverUrl || ""}
-                    onChange={(e) =>
-                      setNewTrack((p) => ({ ...p, coverUrl: e.target.value }))
-                    }
-                    placeholder="https://..."
-                    className="bg-white border-zinc-300 text-zinc-900"
-                  />
-                  {newTrack.coverUrl && (
-                    <img
-                      src={newTrack.coverUrl}
-                      alt="Preview"
-                      className="w-16 h-16 rounded-lg object-cover mt-2"
-                    />
-                  )}
-                </div>
-              </div>
+              {/* 2. Files */}
+              {renderFilesSection(
+                newTrack,
+                newAudioFile,
+                newCoverFile,
+                newAudioRef,
+                newCoverRef,
+                setNewAudioFile,
+                setNewCoverFile
+              )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-xs text-zinc-500">Orden</Label>
-                  <Input
-                    type="number"
-                    value={newTrack.order ?? 0}
-                    onChange={(e) =>
-                      setNewTrack((p) => ({
-                        ...p,
-                        order: parseInt(e.target.value) || 0,
-                      }))
-                    }
-                    className="bg-white border-zinc-300 text-zinc-900"
-                  />
-                </div>
-              </div>
+              {/* 3. Chapter */}
+              {renderChapterSection(
+                newTrack,
+                handleNewChapterChange,
+                (locked) => setNewTrack((p) => ({ ...p, isLockedByChapter: locked }))
+              )}
 
-              <div className="flex items-center gap-6">
-                <div className="flex items-center gap-2">
-                  <Switch
-                    checked={newTrack.isInstrumental || false}
-                    onCheckedChange={(v) =>
-                      setNewTrack((p) => ({ ...p, isInstrumental: v }))
-                    }
-                  />
-                  <Label className="text-xs text-zinc-600">Instrumental</Label>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Switch
-                    checked={newTrack.active ?? true}
-                    onCheckedChange={(v) =>
-                      setNewTrack((p) => ({ ...p, active: v }))
-                    }
-                  />
-                  <Label className="text-xs text-zinc-600">Activo</Label>
-                </div>
-              </div>
+              {/* 4. Lyrics */}
+              {renderLyricsSection(
+                newTrack,
+                (key, val) => setNewTrack((p) => ({ ...p, [key]: val }))
+              )}
+
+              {/* 5. Status */}
+              {renderStatusSection(
+                newTrack,
+                (key, val) => setNewTrack((p) => ({ ...p, [key]: val }))
+              )}
 
               <div className="flex gap-2 pt-2">
                 <Button
@@ -347,7 +744,7 @@ export default function MusicPage() {
                   disabled={creatingTrack || !newTrack.title}
                   className="bg-amber-600 hover:bg-amber-700"
                 >
-                  {creatingTrack ? "Creando..." : "Crear canción"}
+                  {creatingTrack ? "Creando..." : "Crear cancion"}
                 </Button>
                 <Button
                   variant="ghost"
@@ -365,7 +762,7 @@ export default function MusicPage() {
             <div className="bg-white border border-zinc-200 rounded-xl p-8 text-center shadow-sm">
               <p className="text-zinc-600 mb-2">No hay tracks en Firestore</p>
               <p className="text-sm text-zinc-400">
-                Usa el botón de arriba para crear la primera canción.
+                Usa el boton de arriba para crear la primera cancion.
               </p>
             </div>
           ) : (
@@ -434,10 +831,18 @@ export default function MusicPage() {
                               </p>
                               <p className="text-sm text-zinc-500 truncate">
                                 {track.artist}
-                                {track.style ? ` · ${track.style}` : ""}
+                                {track.style ? ` \u00B7 ${track.style}` : ""}
                               </p>
                             </div>
                             <div className="flex items-center gap-2 flex-shrink-0">
+                              {track.isLockedByChapter && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-amber-500 border-amber-400/30"
+                                >
+                                  Bloqueado
+                                </Badge>
+                              )}
                               {track.isInstrumental && (
                                 <Badge
                                   variant="outline"
@@ -478,171 +883,37 @@ export default function MusicPage() {
 
                           {/* Expanded edit form */}
                           {expandedId === track.id && (
-                            <div className="bg-zinc-50 border border-zinc-200 border-t-0 rounded-b-lg p-5 space-y-5">
-                              {/* Basic info */}
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                  <Label className="text-xs text-zinc-500">
-                                    Título
-                                  </Label>
-                                  <Input
-                                    value={editData.title || ""}
-                                    onChange={(e) =>
-                                      updateField("title", e.target.value)
-                                    }
-                                    className="bg-white border-zinc-300 text-zinc-900"
-                                  />
-                                </div>
-                                <div>
-                                  <Label className="text-xs text-zinc-500">
-                                    Artista
-                                  </Label>
-                                  <Input
-                                    value={editData.artist || ""}
-                                    onChange={(e) =>
-                                      updateField("artist", e.target.value)
-                                    }
-                                    className="bg-white border-zinc-300 text-zinc-900"
-                                  />
-                                </div>
-                                <div>
-                                  <Label className="text-xs text-zinc-500">
-                                    Álbum
-                                  </Label>
-                                  <Input
-                                    value={editData.album || ""}
-                                    onChange={(e) =>
-                                      updateField("album", e.target.value)
-                                    }
-                                    className="bg-white border-zinc-300 text-zinc-900"
-                                  />
-                                </div>
-                                <div>
-                                  <Label className="text-xs text-zinc-500">
-                                    Estilo / Género
-                                  </Label>
-                                  <Input
-                                    value={(editData.style as string) || ""}
-                                    onChange={(e) =>
-                                      updateField("style", e.target.value)
-                                    }
-                                    placeholder="ej: Pop, Rock, Balada..."
-                                    className="bg-white border-zinc-300 text-zinc-900"
-                                  />
-                                </div>
-                                <div>
-                                  <Label className="text-xs text-zinc-500">
-                                    Orden
-                                  </Label>
-                                  <Input
-                                    type="number"
-                                    value={editData.order ?? 0}
-                                    onChange={(e) =>
-                                      updateField(
-                                        "order",
-                                        parseInt(e.target.value) || 0
-                                      )
-                                    }
-                                    className="bg-white border-zinc-300 text-zinc-900"
-                                  />
-                                </div>
-                              </div>
+                            <div className="bg-zinc-50 border border-zinc-200 border-t-0 rounded-b-lg p-5 space-y-6">
+                              {/* 1. Basic info */}
+                              {renderBasicInfoSection(
+                                editData,
+                                updateField,
+                                "edit-album-list",
+                                "edit-style-list"
+                              )}
 
-                              {/* Audio preview */}
-                              <div>
-                                <Label className="text-xs text-zinc-500 mb-2 block">
-                                  Audio
-                                </Label>
-                                {editData.audioUrl ? (
-                                  <div className="bg-white border border-zinc-200 rounded-lg p-4 space-y-3">
-                                    <audio
-                                      controls
-                                      src={editData.audioUrl}
-                                      className="w-full h-10"
-                                      preload="none"
-                                    />
-                                    <div>
-                                      <Label className="text-xs text-zinc-400">
-                                        URL del audio
-                                      </Label>
-                                      <Input
-                                        value={editData.audioUrl || ""}
-                                        onChange={(e) =>
-                                          updateField(
-                                            "audioUrl",
-                                            e.target.value
-                                          )
-                                        }
-                                        placeholder="https://..."
-                                        className="bg-white border-zinc-300 text-zinc-900 mt-1"
-                                      />
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div className="bg-white border border-zinc-200 border-dashed rounded-lg p-4">
-                                    <Label className="text-xs text-zinc-400">
-                                      URL del audio
-                                    </Label>
-                                    <Input
-                                      value={editData.audioUrl || ""}
-                                      onChange={(e) =>
-                                        updateField(
-                                          "audioUrl",
-                                          e.target.value
-                                        )
-                                      }
-                                      placeholder="https://..."
-                                      className="bg-white border-zinc-300 text-zinc-900 mt-1"
-                                    />
-                                  </div>
-                                )}
-                              </div>
+                              {/* 2. Files */}
+                              {renderFilesSection(
+                                editData,
+                                editAudioFile,
+                                editCoverFile,
+                                editAudioRef,
+                                editCoverRef,
+                                setEditAudioFile,
+                                setEditCoverFile
+                              )}
 
-                              {/* Cover image */}
-                              <div>
-                                <Label className="text-xs text-zinc-500 mb-2 block">
-                                  Portada
-                                </Label>
-                                <div className="bg-white border border-zinc-200 rounded-lg p-4">
-                                  <div className="flex items-start gap-4">
-                                    {editData.coverUrl ? (
-                                      <img
-                                        src={editData.coverUrl}
-                                        alt="Portada"
-                                        className="w-[120px] h-[120px] rounded-lg object-cover flex-shrink-0"
-                                      />
-                                    ) : (
-                                      <div className="w-[120px] h-[120px] rounded-lg bg-zinc-100 flex items-center justify-center flex-shrink-0">
-                                        <span className="text-3xl text-zinc-300">
-                                          🎵
-                                        </span>
-                                      </div>
-                                    )}
-                                    <div className="flex-1 space-y-2">
-                                      <Label className="text-xs text-zinc-400">
-                                        URL de la portada
-                                      </Label>
-                                      <Input
-                                        value={editData.coverUrl || ""}
-                                        onChange={(e) =>
-                                          updateField(
-                                            "coverUrl",
-                                            e.target.value
-                                          )
-                                        }
-                                        placeholder="https://..."
-                                        className="bg-white border-zinc-300 text-zinc-900"
-                                      />
-                                      <p className="text-xs text-zinc-400">
-                                        Introduce la URL de la imagen de
-                                        portada. Se mostrará a 120x120px.
-                                      </p>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
+                              {/* 3. Chapter */}
+                              {renderChapterSection(
+                                editData,
+                                handleEditChapterChange,
+                                (locked) => updateField("isLockedByChapter", locked)
+                              )}
 
-                              {/* Linked track */}
+                              {/* 4. Lyrics */}
+                              {renderLyricsSection(editData, updateField)}
+
+                              {/* Linked track (keep for backwards compat) */}
                               <div>
                                 <Label className="text-xs text-zinc-500">
                                   ID del track principal (si es instrumental)
@@ -662,67 +933,8 @@ export default function MusicPage() {
                                 />
                               </div>
 
-                              {/* Lyrics */}
-                              <div>
-                                <div className="flex items-center justify-between mb-1">
-                                  <Label className="text-xs text-zinc-500">
-                                    Letra
-                                  </Label>
-                                </div>
-                                <Textarea
-                                  value={(editData.lyrics as string) || ""}
-                                  onChange={(e) =>
-                                    updateField("lyrics", e.target.value)
-                                  }
-                                  placeholder="Escribe la letra de la canción..."
-                                  className="bg-white border-zinc-300 text-zinc-900 font-mono text-sm min-h-[200px] p-4"
-                                  style={{ minHeight: "200px" }}
-                                />
-                                <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                                  <p className="text-xs text-blue-700">
-                                    <strong>Formato LRC para letras sincronizadas:</strong>{" "}
-                                    <code className="bg-blue-100 px-1 rounded">
-                                      [00:12.34] Línea de la letra
-                                    </code>
-                                  </p>
-                                  <p className="text-xs text-blue-600 mt-1">
-                                    Cada línea empieza con el timestamp entre
-                                    corchetes [mm:ss.cc] seguido del texto.
-                                    Ejemplo:
-                                  </p>
-                                  <pre className="text-xs text-blue-600 mt-1 font-mono">
-                                    {`[00:00.00] Intro\n[00:15.30] Primera línea de la canción\n[00:22.10] Segunda línea...`}
-                                  </pre>
-                                </div>
-                              </div>
-
-                              {/* Toggles */}
-                              <div className="flex items-center gap-6">
-                                <div className="flex items-center gap-2">
-                                  <Switch
-                                    checked={
-                                      editData.isInstrumental || false
-                                    }
-                                    onCheckedChange={(v) =>
-                                      updateField("isInstrumental", v)
-                                    }
-                                  />
-                                  <Label className="text-xs text-zinc-600">
-                                    Instrumental
-                                  </Label>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <Switch
-                                    checked={editData.active || false}
-                                    onCheckedChange={(v) =>
-                                      updateField("active", v)
-                                    }
-                                  />
-                                  <Label className="text-xs text-zinc-600">
-                                    Activo
-                                  </Label>
-                                </div>
-                              </div>
+                              {/* 5. Status */}
+                              {renderStatusSection(editData, updateField)}
 
                               {/* Actions */}
                               <div className="flex gap-2 pt-2">
@@ -740,6 +952,8 @@ export default function MusicPage() {
                                   onClick={() => {
                                     setExpandedId(null);
                                     setEditData({});
+                                    setEditAudioFile(null);
+                                    setEditCoverFile(null);
                                   }}
                                 >
                                   Cancelar
