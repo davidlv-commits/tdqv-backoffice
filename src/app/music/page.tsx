@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState, useMemo, useRef } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { AuthGuard } from "@/components/auth-guard";
 import { Sidebar } from "@/components/sidebar";
+import { uploadFile } from "@/lib/upload";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -414,148 +415,82 @@ export default function MusicPage() {
     onCoverSelect: (file: File | null) => void,
     onFieldChange?: (key: string, value: string) => void
   ) {
+    const [uploadingAudio, setUploadingAudio] = useState(false);
+    const [uploadingCover, setUploadingCover] = useState(false);
+
+    const handleAudioUpload = async (file: File) => {
+      setUploadingAudio(true);
+      try {
+        const url = await uploadFile(file, "tu-de-que-vas");
+        onFieldChange?.("audioUrl", url);
+        onAudioSelect(null);
+      } catch { /* error silencioso */ }
+      setUploadingAudio(false);
+    };
+
+    const handleCoverUpload = async (file: File) => {
+      setUploadingCover(true);
+      try {
+        const url = await uploadFile(file, "covers");
+        onFieldChange?.("coverUrl", url);
+        onCoverSelect(null);
+      } catch { /* error silencioso */ }
+      setUploadingCover(false);
+    };
+
     return (
       <div>
-        <h4 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3">
-          Archivos
-        </h4>
+        <h4 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3">Archivos</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Audio upload */}
+          {/* Audio */}
           <div>
             <Label className="text-xs text-zinc-500 mb-2 block">Audio</Label>
             <div className="bg-white border border-zinc-200 rounded-lg p-4 space-y-3">
-              {data.audioUrl && !audioFile ? (
-                <div className="flex items-center gap-2">
-                  <span className="text-green-600 text-sm font-medium">Audio cargado</span>
-                  <span className="text-xs text-zinc-400 truncate max-w-[200px]">
-                    {data.audioUrl.split("/").pop()}
-                  </span>
-                  <audio
-                    controls
-                    src={data.audioUrl}
-                    className="w-full h-8 mt-2"
-                    preload="none"
-                  />
+              {data.audioUrl && (
+                <div>
+                  <span className="text-green-600 text-sm font-medium">Audio cargado ✓</span>
+                  <audio controls src={data.audioUrl} className="w-full h-8 mt-2" preload="none" />
                 </div>
-              ) : audioFile ? (
-                <div className="flex items-center gap-2">
-                  <span className="text-amber-600 text-sm font-medium">Archivo seleccionado</span>
-                  <span className="text-xs text-zinc-500 truncate">{audioFile.name}</span>
-                  <button
-                    type="button"
-                    onClick={() => onAudioSelect(null)}
-                    className="text-xs text-red-400 hover:text-red-600 ml-auto"
-                  >
-                    Quitar
-                  </button>
-                </div>
-              ) : null}
-              <input
-                ref={audioInputRef}
-                type="file"
-                accept=".m4a,.mp3,audio/mpeg,audio/mp4"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0] || null;
-                  onAudioSelect(file);
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => audioInputRef.current?.click()}
-                className="w-full border-2 border-dashed border-zinc-300 rounded-lg py-3 px-4 text-sm text-zinc-500 hover:border-amber-400 hover:text-amber-600 transition-colors flex items-center justify-center gap-2"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                </svg>
-                Subir audio (.m4a, .mp3)
+              )}
+              <input ref={audioInputRef} type="file" accept=".m4a,.mp3,audio/mpeg,audio/mp4" className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) handleAudioUpload(f); }} />
+              <button type="button" onClick={() => audioInputRef.current?.click()} disabled={uploadingAudio}
+                className="w-full border-2 border-dashed border-zinc-300 rounded-lg py-3 px-4 text-sm text-zinc-500 hover:border-amber-400 hover:text-amber-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-50">
+                {uploadingAudio ? "Subiendo..." : data.audioUrl ? "Cambiar audio" : "Subir audio (.m4a, .mp3)"}
               </button>
-              <p className="text-xs text-zinc-400">
-                La subida a R2 se implementara proximamente. Por ahora solo seleccion de archivo.
-              </p>
             </div>
           </div>
 
-          {/* Cover image */}
+          {/* Portada */}
           <div>
             <Label className="text-xs text-zinc-500 mb-2 block">Portada</Label>
             <div className="bg-white border border-zinc-200 rounded-lg p-4">
-              <input
-                ref={coverInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0] || null;
-                  onCoverSelect(file);
-                }}
-              />
-              <div className="flex items-start gap-4">
-                {/* Cover preview or placeholder */}
-                {data.coverUrl && !coverFile ? (
-                  <button
-                    type="button"
-                    onClick={() => coverInputRef.current?.click()}
-                    className="relative group flex-shrink-0"
-                  >
-                    <img
-                      src={data.coverUrl}
-                      alt="Portada"
-                      className="w-[120px] h-[120px] rounded-lg object-cover"
-                    />
+              <input ref={coverInputRef} type="file" accept="image/*" className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) handleCoverUpload(f); }} />
+              <button type="button" onClick={() => coverInputRef.current?.click()} disabled={uploadingCover}
+                className="relative group">
+                {data.coverUrl ? (
+                  <div className="relative">
+                    <img src={data.coverUrl} alt="Portada" className="w-[120px] h-[120px] rounded-lg object-cover" />
                     <div className="absolute inset-0 bg-black/40 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                       <span className="text-white text-xs font-medium">Cambiar</span>
                     </div>
-                  </button>
-                ) : coverFile ? (
-                  <button
-                    type="button"
-                    onClick={() => coverInputRef.current?.click()}
-                    className="relative group flex-shrink-0"
-                  >
-                    <img
-                      src={URL.createObjectURL(coverFile)}
-                      alt="Preview"
-                      className="w-[120px] h-[120px] rounded-lg object-cover"
-                    />
-                    <div className="absolute inset-0 bg-black/40 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <span className="text-white text-xs font-medium">Cambiar</span>
-                    </div>
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => coverInputRef.current?.click()}
-                    className="w-[120px] h-[120px] rounded-lg border-2 border-dashed border-zinc-300 flex flex-col items-center justify-center flex-shrink-0 hover:border-amber-400 hover:text-amber-600 transition-colors text-zinc-400"
-                  >
-                    <svg className="w-6 h-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5a2.25 2.25 0 002.25-2.25V6.75a2.25 2.25 0 00-2.25-2.25H3.75A2.25 2.25 0 001.5 6.75v10.5A2.25 2.25 0 003.75 21z" />
-                    </svg>
-                    <span className="text-xs">Subir portada</span>
-                  </button>
-                )}
-                <div className="flex-1 space-y-2 pt-2">
-                  <div>
-                    <label className="text-[10px] text-zinc-400 block mb-1">URL de la portada</label>
-                    <input
-                      type="text"
-                      value={data.coverUrl || ""}
-                      onChange={e => onFieldChange?.("coverUrl", e.target.value)}
-                      placeholder="https://... o pega un enlace de imagen"
-                      className="w-full h-8 text-xs rounded-md border border-zinc-300 bg-white text-zinc-900 px-2"
-                    />
                   </div>
-                  {coverFile && (
-                    <button
-                      type="button"
-                      onClick={() => onCoverSelect(null)}
-                      className="text-xs text-red-400 hover:text-red-600"
-                    >
-                      Quitar imagen seleccionada
-                    </button>
-                  )}
-                </div>
-              </div>
+                ) : (
+                  <div className="w-[120px] h-[120px] rounded-lg border-2 border-dashed border-zinc-300 flex flex-col items-center justify-center hover:border-amber-400 hover:text-amber-600 transition-colors text-zinc-400">
+                    {uploadingCover ? (
+                      <span className="text-xs">Subiendo...</span>
+                    ) : (
+                      <>
+                        <svg className="w-6 h-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5a2.25 2.25 0 002.25-2.25V6.75a2.25 2.25 0 00-2.25-2.25H3.75A2.25 2.25 0 001.5 6.75v10.5A2.25 2.25 0 003.75 21z" />
+                        </svg>
+                        <span className="text-xs">Subir portada</span>
+                      </>
+                    )}
+                  </div>
+                )}
+              </button>
             </div>
           </div>
         </div>
