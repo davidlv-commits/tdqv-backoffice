@@ -208,10 +208,13 @@ export default function MusicPage() {
       }
 
       await saveTrack(dataToSave);
+      // Actualizar la lista con los datos guardados.
+      const savedData = { ...editData };
       setTracks((prev) =>
-        prev.map((t) => (t.id === expandedId ? { ...t, ...editData } : t))
+        prev.map((t) => (t.id === expandedId ? { ...t, ...savedData } : t))
       );
-      // No cerrar la edición — mostrar confirmación.
+      // Refrescar editData para que la preview use coverUrl de R2.
+      setEditData(savedData);
       setEditAudioFile(null);
       setEditCoverFile(null);
       setSaveMsg("Guardado ✓");
