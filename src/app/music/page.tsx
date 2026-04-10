@@ -433,13 +433,12 @@ export default function MusicPage() {
     };
 
     const handleCoverUpload = async (file: File) => {
+      onCoverSelect(file); // Mostrar preview local inmediatamente.
       setUploadingCover(true);
       try {
         const url = await uploadFile(file, "covers");
-        // Actualizar editData directamente.
         setEditData(prev => ({...prev, coverUrl: url}));
         setNewTrack(prev => ({...prev, coverUrl: url}));
-        onCoverSelect(null);
       } catch (e) { console.error("Cover upload error:", e); }
       setUploadingCover(false);
     };
@@ -475,9 +474,9 @@ export default function MusicPage() {
                 onChange={e => { const f = e.target.files?.[0]; if (f) handleCoverUpload(f); }} />
               <button type="button" onClick={() => coverInputRef.current?.click()} disabled={uploadingCover}
                 className="relative group">
-                {data.coverUrl ? (
+                {(data.coverUrl || coverFile) ? (
                   <div className="relative">
-                    <img src={data.coverUrl} alt="Portada" className="w-[120px] h-[120px] rounded-lg object-cover" />
+                    <img src={coverFile ? URL.createObjectURL(coverFile) : (data.coverUrl || "")} alt="Portada" className="w-[120px] h-[120px] rounded-lg object-cover" />
                     <div className="absolute inset-0 bg-black/40 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                       <span className="text-white text-xs font-medium">Cambiar</span>
                     </div>
