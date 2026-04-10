@@ -51,7 +51,25 @@ export interface Track {
   active: boolean;
   lyrics?: string;
   style?: string;
-  lockedUntilChapter?: string;  // chapter ID that unlocks this track
-  lockedUntilChapterTitle?: string;  // chapter title for display
-  isLockedByChapter?: boolean;  // whether track is locked until chapter is read
+  lockedUntilChapter?: string;
+  lockedUntilChapterTitle?: string;
+  isLockedByChapter?: boolean;
+}
+
+export type VideoSource = 'youtube' | 'r2' | 'url';
+
+export interface Video {
+  id: string;
+  title: string;
+  description?: string;
+  source: VideoSource;
+  youtubeId?: string;       // ID de YouTube (ej: jVmXHY6X0vQ)
+  videoUrl?: string;        // URL directa (R2 o externa)
+  thumbnailUrl?: string;    // Thumbnail personalizado o auto de YouTube
+  duration?: number;
+  order: number;
+  active: boolean;
+  lockedUntilChapter?: string;
+  lockedUntilChapterTitle?: string;
+  isLockedByChapter?: boolean;
 }

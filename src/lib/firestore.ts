@@ -3,7 +3,7 @@ import {
   query, where, orderBy, addDoc, Timestamp,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { Book, Chapter, MediaMoment, Track } from './types';
+import type { Book, Chapter, MediaMoment, Track, Video } from './types';
 
 // ═══ Books ═══
 
@@ -86,6 +86,31 @@ export async function saveTrack(track: Partial<Track> & { id: string }) {
   await setDoc(doc(db, 'tracks', id), data, { merge: true });
 }
 
+export async function addTrack(track: Omit<Track, 'id'>) {
+  return addDoc(collection(db, 'tracks'), track);
+}
+
 export async function deleteTrack(id: string) {
   await deleteDoc(doc(db, 'tracks', id));
+}
+
+// ═══ Videos ═══
+
+export async function getVideos(): Promise<Video[]> {
+  const q = query(collection(db, 'videos'), orderBy('order'));
+  const snap = await getDocs(q);
+  return snap.docs.map(d => ({ id: d.id, ...d.data() } as Video));
+}
+
+export async function saveVideo(video: Partial<Video> & { id: string }) {
+  const { id, ...data } = video;
+  await setDoc(doc(db, 'videos', id), data, { merge: true });
+}
+
+export async function addVideo(video: Omit<Video, 'id'>) {
+  return addDoc(collection(db, 'videos'), video);
+}
+
+export async function deleteVideo(id: string) {
+  await deleteDoc(doc(db, 'videos', id));
 }
