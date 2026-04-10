@@ -55,6 +55,9 @@ export default function ChapterEditorPage() {
           mediaUrl: h.mediaUrl,
           isExclusive: h.isExclusive,
           displayStyle: h.displayStyle as "inline" | "fullscreen" | "ambient",
+          autoplay: h.autoplay,
+          initialVolume: h.initialVolume,
+          crossfadeWithId: h.crossfadeWithId,
           order: i,
           active: true,
         });

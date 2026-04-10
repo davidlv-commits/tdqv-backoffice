@@ -32,6 +32,9 @@ export interface MediaMoment {
   mediaUrl: string;
   isExclusive: boolean; // Bloqueado hasta completar capítulo
   displayStyle: DisplayStyle;
+  autoplay?: boolean;
+  initialVolume?: number;
+  crossfadeWithId?: string;
   unlockMessage?: string;
   order: number; // Si hay varios en el mismo párrafo
   active: boolean;
