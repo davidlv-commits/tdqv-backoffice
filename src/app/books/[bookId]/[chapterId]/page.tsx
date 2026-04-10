@@ -75,13 +75,18 @@ export default function ChapterEditorPage() {
   }, [bookId, chapterId, chapter, moments]);
 
   // Convert existing moments to hooks for the editor.
-  const existingHooks: MediaHook[] = moments.map(m => ({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const existingHooks: MediaHook[] = moments.map((m: any) => ({
     mediaType: m.mediaType,
     mediaId: m.mediaId,
     title: m.title,
     mediaUrl: m.mediaUrl,
     isExclusive: m.isExclusive,
     displayStyle: m.displayStyle,
+    autoplay: m.autoplay || false,
+    initialVolume: m.initialVolume || 0.3,
+    crossfadeWithId: m.crossfadeWithId || "",
+    crossfadeWithTitle: m.crossfadeWithTitle || "",
   }));
 
   return (

@@ -29,6 +29,10 @@ export interface MediaHook {
   mediaUrl: string;
   isExclusive: boolean;
   displayStyle: string;
+  autoplay: boolean;
+  initialVolume: number;
+  crossfadeWithId: string;
+  crossfadeWithTitle: string;
 }
 
 export function ChapterRichEditor({
@@ -43,6 +47,9 @@ export function ChapterRichEditor({
   const [availableTracks, setAvailableTracks] = useState<Track[]>([]);
   const [selectedMediaType, setSelectedMediaType] = useState<string>("");
   const [selectedTrackId, setSelectedTrackId] = useState("");
+  const [autoplay, setAutoplay] = useState(false);
+  const [initialVolume, setInitialVolume] = useState(0.3);
+  const [crossfadeTrackId, setCrossfadeTrackId] = useState("");
 
   useEffect(() => {
     getTracks().then(setAvailableTracks);
@@ -81,6 +88,10 @@ export function ChapterRichEditor({
           mediaUrl: node.attrs?.mediaUrl || "",
           isExclusive: node.attrs?.isExclusive ?? true,
           displayStyle: node.attrs?.displayStyle || "inline",
+          autoplay: node.attrs?.autoplay ?? false,
+          initialVolume: node.attrs?.initialVolume ?? 0.3,
+          crossfadeWithId: node.attrs?.crossfadeWithId || "",
+          crossfadeWithTitle: node.attrs?.crossfadeWithTitle || "",
         });
       }
     }
@@ -129,7 +140,8 @@ export function ChapterRichEditor({
     const track = availableTracks.find((t) => t.id === selectedTrackId);
     if (!track) return;
 
-    const mType = selectedMediaType === "instrumental" ? "music" : (selectedMediaType || "music");
+    const mType = selectedMediaType || "music";
+    const crossfadeTrack = crossfadeTrackId ? availableTracks.find(t => t.id === crossfadeTrackId) : null;
 
     editor
       .chain()
@@ -141,15 +153,22 @@ export function ChapterRichEditor({
           mediaId: track.id,
           title: track.title,
           mediaUrl: track.audioUrl,
-          isExclusive: true,
-          displayStyle: "inline",
+          isExclusive: !autoplay,
+          displayStyle: autoplay ? "ambient" : "inline",
+          autoplay,
+          initialVolume,
+          crossfadeWithId: crossfadeTrackId,
+          crossfadeWithTitle: crossfadeTrack?.title || "",
         },
       })
       .run();
 
     setShowInsert(false);
     setSelectedTrackId("");
-  }, [editor, selectedTrackId, availableTracks]);
+    setAutoplay(false);
+    setInitialVolume(0.3);
+    setCrossfadeTrackId("");
+  }, [editor, selectedTrackId, availableTracks, autoplay, initialVolume, crossfadeTrackId, selectedMediaType]);
 
   return (
     <div>
@@ -178,66 +197,116 @@ export function ChapterRichEditor({
         </Button>
       </div>
 
-      {/* Insert media panel — dos desplegables: tipo → contenido */}
+      {/* Insert media panel */}
       {showInsert && (
-        <div className="bg-amber-50 border-b border-amber-200 px-4 py-3 flex items-end gap-3">
-          {/* Paso 1: Tipo de media */}
-          <div className="w-40">
-            <label className="text-xs text-zinc-500 mb-1 block">Tipo</label>
-            <Select value={selectedMediaType} onValueChange={(v) => { setSelectedMediaType(v || ""); setSelectedTrackId(""); }}>
-              <SelectTrigger className="bg-white border-zinc-300 text-zinc-900 h-9">
-                <SelectValue placeholder="Tipo..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="music">🎵 Música</SelectItem>
-                <SelectItem value="instrumental">🎹 Instrumental</SelectItem>
-                <SelectItem value="audio">🎙️ Audio</SelectItem>
-                <SelectItem value="video">🎬 Vídeo</SelectItem>
-                <SelectItem value="image">🖼️ Imagen</SelectItem>
-              </SelectContent>
-            </Select>
+        <div className="bg-amber-50 border-b border-amber-200 px-4 py-4 space-y-3">
+          {/* Fila 1: Tipo + Contenido */}
+          <div className="flex items-end gap-3">
+            <div className="w-44">
+              <label className="text-xs text-zinc-500 mb-1 block">Tipo de media</label>
+              <Select value={selectedMediaType} onValueChange={(v) => { setSelectedMediaType(v || ""); setSelectedTrackId(""); }}>
+                <SelectTrigger className="bg-white border-zinc-300 text-zinc-900 h-9">
+                  <SelectValue placeholder="Tipo..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="music">🎵 Canciones</SelectItem>
+                  <SelectItem value="instrumental">🎹 Instrumentales</SelectItem>
+                  <SelectItem value="audio">🎙️ Audios</SelectItem>
+                  <SelectItem value="video">🎬 Vídeos</SelectItem>
+                  <SelectItem value="image">🖼️ Imágenes</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex-1">
+              <label className="text-xs text-zinc-500 mb-1 block">Contenido</label>
+              <Select value={selectedTrackId} onValueChange={(v) => setSelectedTrackId(v || "")} disabled={!selectedMediaType}>
+                <SelectTrigger className="bg-white border-zinc-300 text-zinc-900 h-9">
+                  <SelectValue placeholder={selectedMediaType ? "Selecciona..." : "Elige un tipo primero"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {filteredMedia.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.title}
+                    </SelectItem>
+                  ))}
+                  {filteredMedia.length === 0 && (
+                    <SelectItem value="__empty" disabled>No hay contenido de este tipo</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
-          {/* Paso 2: Contenido filtrado por tipo */}
-          <div className="flex-1">
-            <label className="text-xs text-zinc-500 mb-1 block">Contenido</label>
-            <Select
-              value={selectedTrackId}
-              onValueChange={(v) => setSelectedTrackId(v || "")}
-              disabled={!selectedMediaType}
+          {/* Fila 2: Opciones de reproducción (solo para audio/música) */}
+          {selectedTrackId && selectedTrackId !== "__empty" && (selectedMediaType === "music" || selectedMediaType === "instrumental") && (
+            <div className="flex items-center gap-4 bg-white rounded-lg border border-zinc-200 px-4 py-3">
+              {/* Autoplay */}
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={autoplay}
+                  onChange={(e) => setAutoplay(e.target.checked)}
+                  className="w-4 h-4 rounded border-zinc-300 text-amber-600 focus:ring-amber-500"
+                />
+                <span className="text-xs text-zinc-700 font-medium">Autoplay</span>
+              </label>
+
+              {/* Volumen inicial (solo si autoplay) */}
+              {autoplay && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-zinc-500">Vol:</span>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={Math.round(initialVolume * 100)}
+                    onChange={(e) => setInitialVolume(Number(e.target.value) / 100)}
+                    className="w-24 h-1 accent-amber-600"
+                  />
+                  <span className="text-xs text-zinc-600 font-mono w-8">{Math.round(initialVolume * 100)}%</span>
+                </div>
+              )}
+
+              {/* Crossfade */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-zinc-500">Crossfade →</span>
+                <Select value={crossfadeTrackId} onValueChange={(v) => setCrossfadeTrackId(v || "")}>
+                  <SelectTrigger className="bg-white border-zinc-300 text-zinc-900 h-8 w-48 text-xs">
+                    <SelectValue placeholder="Ninguno" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Ninguno</SelectItem>
+                    {availableTracks
+                      .filter(t => t.id !== selectedTrackId && !t.isInstrumental)
+                      .map((t) => (
+                        <SelectItem key={t.id} value={t.id}>{t.title}</SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+
+          {/* Fila 3: Botones */}
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              onClick={handleInsertMedia}
+              disabled={!selectedTrackId || selectedTrackId === "__empty"}
+              className="bg-amber-600 hover:bg-amber-700 text-white h-9"
             >
-              <SelectTrigger className="bg-white border-zinc-300 text-zinc-900 h-9">
-                <SelectValue placeholder={selectedMediaType ? "Selecciona..." : "Elige un tipo primero"} />
-              </SelectTrigger>
-              <SelectContent>
-                {filteredMedia.map((t) => (
-                  <SelectItem key={t.id} value={t.id}>
-                    {t.title} {t.artist !== "TDQV" && t.artist !== "TDQV Instrumental" ? `— ${t.artist}` : ""}
-                  </SelectItem>
-                ))}
-                {filteredMedia.length === 0 && (
-                  <SelectItem value="__empty" disabled>No hay contenido de este tipo</SelectItem>
-                )}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <Button
-            size="sm"
-            onClick={handleInsertMedia}
-            disabled={!selectedTrackId || selectedTrackId === "__empty"}
-            className="bg-amber-600 hover:bg-amber-700 text-white h-9"
-          >
-            Insertar aquí
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => { setShowInsert(false); setSelectedTrackId(""); setSelectedMediaType(""); }}
-            className="h-9 text-zinc-500"
+              Insertar aquí
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => { setShowInsert(false); setSelectedTrackId(""); setSelectedMediaType(""); setAutoplay(false); setCrossfadeTrackId(""); }}
+              className="h-9 text-zinc-500"
           >
             ✕
           </Button>
+          </div>
         </div>
       )}
 
