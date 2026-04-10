@@ -203,6 +203,9 @@ export default function MusicPage() {
         id: expandedId,
         ...editData,
       };
+      // Aplicar URLs pendientes de uploads async.
+      if (pendingAudioUrl.current) dataToSave.audioUrl = pendingAudioUrl.current;
+      if (pendingCoverUrl.current) dataToSave.coverUrl = pendingCoverUrl.current;
       if (!dataToSave.lyrics) delete dataToSave.lyrics;
       if (!dataToSave.linkedMainTrackId) delete dataToSave.linkedMainTrackId;
       if (!dataToSave.style) delete dataToSave.style;
@@ -218,7 +221,11 @@ export default function MusicPage() {
       setTracks((prev) =>
         prev.map((t) => (t.id === expandedId ? { ...t, ...savedData } : t))
       );
-      // Refrescar editData para que la preview use coverUrl de R2.
+      // Refrescar editData con las URLs confirmadas.
+      if (pendingCoverUrl.current) savedData.coverUrl = pendingCoverUrl.current;
+      if (pendingAudioUrl.current) savedData.audioUrl = pendingAudioUrl.current;
+      pendingCoverUrl.current = "";
+      pendingAudioUrl.current = "";
       setEditData(savedData);
       setEditAudioFile(null);
       // Solo borrar coverFile si ya tenemos la URL de R2.
@@ -418,6 +425,9 @@ export default function MusicPage() {
   const [uploadingAudio, setUploadingAudio] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
+  // Refs para URLs subidas — evita problemas de closures con setState async.
+  const pendingAudioUrl = useRef<string>("");
+  const pendingCoverUrl = useRef<string>("");
 
   function renderFilesSection(
     data: Partial<Track>,
@@ -433,6 +443,7 @@ export default function MusicPage() {
       setUploadingAudio(true);
       try {
         const url = await uploadFile(file, "tu-de-que-vas");
+        pendingAudioUrl.current = url;
         setEditData(prev => ({...prev, audioUrl: url}));
         setNewTrack(prev => ({...prev, audioUrl: url}));
         onAudioSelect(null);
@@ -448,6 +459,7 @@ export default function MusicPage() {
       setUploadingCover(true);
       try {
         const url = await uploadFile(file, "covers");
+        pendingCoverUrl.current = url;
         setEditData(prev => ({...prev, coverUrl: url}));
         setNewTrack(prev => ({...prev, coverUrl: url}));
       } catch (e) {
