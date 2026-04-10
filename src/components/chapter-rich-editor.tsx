@@ -18,7 +18,7 @@ import type { Track, MediaType } from "@/lib/types";
 
 interface ChapterRichEditorProps {
   initialContent: string;
-  onSave: (body: string, mediaHooks: MediaHook[]) => Promise<void>;
+  onSave: (body: string, mediaHooks: MediaHookWithPosition[]) => Promise<void>;
   existingHooks?: MediaHook[];
 }
 
@@ -33,6 +33,11 @@ export interface MediaHook {
   initialVolume: number;
   crossfadeWithId: string;
   crossfadeWithTitle: string;
+}
+
+export interface MediaHookWithPosition extends MediaHook {
+  /** Index of the paragraph BEFORE which this block appears (0-based). */
+  paragraphIndex: number;
 }
 
 export function ChapterRichEditor({
@@ -59,21 +64,95 @@ export function ChapterRichEditor({
   const filteredMedia = availableTracks.filter((t) => {
     if (selectedMediaType === "music") return !t.isInstrumental;
     if (selectedMediaType === "instrumental") return t.isInstrumental;
-    // audio, video, image: por ahora no hay tracks de estos tipos,
-    // se añadirán cuando el backoffice gestione más tipos de media.
     return false;
   });
 
-  const bodyToHtml = (body: string) => {
+  /**
+   * Builds TipTap-compatible JSON content from body text + existing hooks.
+   * Media blocks are inserted AFTER the paragraph at their paragraphIndex.
+   */
+  const buildEditorContent = (body: string, hooks: (MediaHook & { paragraphIndex?: number })[]) => {
     const paragraphs = body.split("\n\n").filter((p) => p.trim());
-    return paragraphs.map((p) => `<p>${escapeHtml(p)}</p>`).join("");
+
+    // Group hooks by paragraphIndex.
+    const hooksByParagraph = new Map<number, MediaHook[]>();
+    hooks.forEach((h, i) => {
+      const idx = h.paragraphIndex ?? i;
+      if (!hooksByParagraph.has(idx)) hooksByParagraph.set(idx, []);
+      hooksByParagraph.get(idx)!.push(h);
+    });
+
+    const content: Record<string, unknown>[] = [];
+
+    for (let i = 0; i < paragraphs.length; i++) {
+      content.push({
+        type: "paragraph",
+        content: [{ type: "text", text: paragraphs[i] }],
+      });
+
+      // Insert media blocks after this paragraph.
+      const hooksHere = hooksByParagraph.get(i);
+      if (hooksHere) {
+        for (const h of hooksHere) {
+          content.push({
+            type: "mediaBlock",
+            attrs: {
+              mediaType: h.mediaType,
+              mediaId: h.mediaId,
+              title: h.title,
+              mediaUrl: h.mediaUrl,
+              isExclusive: h.isExclusive,
+              displayStyle: h.displayStyle,
+              autoplay: h.autoplay,
+              initialVolume: h.initialVolume,
+              crossfadeWithId: h.crossfadeWithId,
+              crossfadeWithTitle: h.crossfadeWithTitle,
+            },
+          });
+        }
+      }
+    }
+
+    // Hooks that point beyond the text (appended at the end).
+    for (const [idx, hooksArr] of hooksByParagraph.entries()) {
+      if (idx >= paragraphs.length) {
+        for (const h of hooksArr) {
+          content.push({
+            type: "mediaBlock",
+            attrs: {
+              mediaType: h.mediaType,
+              mediaId: h.mediaId,
+              title: h.title,
+              mediaUrl: h.mediaUrl,
+              isExclusive: h.isExclusive,
+              displayStyle: h.displayStyle,
+              autoplay: h.autoplay,
+              initialVolume: h.initialVolume,
+              crossfadeWithId: h.crossfadeWithId,
+              crossfadeWithTitle: h.crossfadeWithTitle,
+            },
+          });
+        }
+      }
+    }
+
+    // If no content at all, add an empty paragraph so TipTap isn't empty.
+    if (content.length === 0) {
+      content.push({ type: "paragraph" });
+    }
+
+    return { type: "doc", content };
   };
 
+  /**
+   * Extracts body text and media hooks WITH their paragraph positions
+   * from the TipTap editor JSON.
+   */
   const htmlToBody = (editor: ReturnType<typeof useEditor>) => {
-    if (!editor) return { body: "", hooks: [] as MediaHook[] };
+    if (!editor) return { body: "", hooks: [] as MediaHookWithPosition[] };
     const json = editor.getJSON();
     const paragraphs: string[] = [];
-    const hooks: MediaHook[] = [];
+    const hooks: MediaHookWithPosition[] = [];
 
     for (const node of json.content || []) {
       if (node.type === "paragraph") {
@@ -81,7 +160,9 @@ export function ChapterRichEditor({
         const text = (node.content || []).map((c: any) => c.text || "").join("");
         if (text.trim()) paragraphs.push(text);
       } else if (node.type === "mediaBlock") {
+        // paragraphIndex = number of paragraphs BEFORE this block.
         hooks.push({
+          paragraphIndex: paragraphs.length - 1 < 0 ? 0 : paragraphs.length - 1,
           mediaType: (node.attrs?.mediaType || "music") as MediaType,
           mediaId: node.attrs?.mediaId || "",
           title: node.attrs?.title || "",
@@ -101,7 +182,6 @@ export function ChapterRichEditor({
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
-        // Solo texto plano — sin formateo.
         bold: false,
         italic: false,
         strike: false,
@@ -118,7 +198,8 @@ export function ChapterRichEditor({
       }),
       MediaBlock,
     ],
-    content: bodyToHtml(initialContent),
+    // Initialize with both text AND existing media blocks.
+    content: buildEditorContent(initialContent, existingHooks),
     editorProps: {
       attributes: {
         class: "focus:outline-none min-h-[400px] text-[15px] leading-[1.9] text-zinc-800",
@@ -237,10 +318,9 @@ export function ChapterRichEditor({
             </div>
           </div>
 
-          {/* Fila 2: Opciones de reproducción (solo para audio/música) */}
+          {/* Fila 2: Opciones de reproducción */}
           {selectedTrackId && selectedTrackId !== "__empty" && (selectedMediaType === "music" || selectedMediaType === "instrumental") && (
             <div className="flex items-center gap-4 bg-white rounded-lg border border-zinc-200 px-4 py-3">
-              {/* Autoplay */}
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
@@ -251,7 +331,6 @@ export function ChapterRichEditor({
                 <span className="text-xs text-zinc-700 font-medium">Autoplay</span>
               </label>
 
-              {/* Volumen inicial (solo si autoplay) */}
               {autoplay && (
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-zinc-500">Vol:</span>
@@ -267,7 +346,6 @@ export function ChapterRichEditor({
                 </div>
               )}
 
-              {/* Crossfade desde pista anterior */}
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"

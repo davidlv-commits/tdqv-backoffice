@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { AuthGuard } from "@/components/auth-guard";
 import { Sidebar } from "@/components/sidebar";
-import { ChapterRichEditor, type MediaHook } from "@/components/chapter-rich-editor";
+import { ChapterRichEditor, type MediaHookWithPosition } from "@/components/chapter-rich-editor";
 import { getChapter, getMediaMoments, saveChapter, saveMediaMoment, deleteMediaMoment } from "@/lib/firestore";
 import type { Chapter, MediaMoment } from "@/lib/types";
 
@@ -27,18 +27,19 @@ export default function ChapterEditorPage() {
     });
   }, [bookId, chapterId]);
 
-  const handleSave = useCallback(async (body: string, hooks: MediaHook[]) => {
+  const handleSave = useCallback(async (body: string, hooks: MediaHookWithPosition[]) => {
     if (!chapter) return;
     try {
-      // Save the updated text.
+      // Save the updated text + mediaMomentCount.
       const paragraphs = body.split("\n\n").filter(p => p.trim());
       await saveChapter(bookId, {
         id: chapterId,
         body,
         paragraphCount: paragraphs.length,
+        mediaMomentCount: hooks.length,
       });
 
-      // Delete old media moments and save new ones from editor hooks.
+      // Delete old media moments and save new ones.
       for (const m of moments) {
         await deleteMediaMoment(m.id);
       }
@@ -47,7 +48,7 @@ export default function ChapterEditorPage() {
         await saveMediaMoment({
           bookId,
           chapterId,
-          paragraphIndex: i,
+          paragraphIndex: h.paragraphIndex,
           mediaType: h.mediaType,
           mediaId: h.mediaId,
           title: h.title,
@@ -64,29 +65,35 @@ export default function ChapterEditorPage() {
       setMoments(newMoments);
 
       // Update local chapter.
-      setChapter(prev => prev ? { ...prev, body, paragraphCount: paragraphs.length } : prev);
+      setChapter(prev => prev ? {
+        ...prev,
+        body,
+        paragraphCount: paragraphs.length,
+        mediaMomentCount: hooks.length,
+      } : prev);
 
-      setSaveMessage("Guardado correctamente");
+      setSaveMessage(`Guardado: ${paragraphs.length} párrafos, ${hooks.length} media`);
       setTimeout(() => setSaveMessage(""), 3000);
     } catch (e) {
+      console.error("Save error:", e);
       setSaveMessage("Error al guardar");
       setTimeout(() => setSaveMessage(""), 3000);
     }
   }, [bookId, chapterId, chapter, moments]);
 
-  // Convert existing moments to hooks for the editor.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const existingHooks: MediaHook[] = moments.map((m: any) => ({
+  // Convert existing moments to hooks for the editor (preserving paragraphIndex).
+  const existingHooks = moments.map((m) => ({
     mediaType: m.mediaType,
     mediaId: m.mediaId,
     title: m.title,
     mediaUrl: m.mediaUrl,
     isExclusive: m.isExclusive,
     displayStyle: m.displayStyle,
-    autoplay: m.autoplay || false,
-    initialVolume: m.initialVolume || 0.3,
-    crossfadeWithId: m.crossfadeWithId || "",
-    crossfadeWithTitle: m.crossfadeWithTitle || "",
+    autoplay: false,
+    initialVolume: 0.3,
+    crossfadeWithId: "",
+    crossfadeWithTitle: "",
+    paragraphIndex: m.paragraphIndex,
   }));
 
   return (
@@ -107,7 +114,7 @@ export default function ChapterEditorPage() {
                 </div>
               </div>
               {saveMessage && (
-                <span className={`text-sm ${saveMessage.includes("Error") ? "text-red-500" : "text-green-600"}`}>
+                <span className={`text-sm font-medium ${saveMessage.includes("Error") ? "text-red-500" : "text-green-600"}`}>
                   {saveMessage}
                 </span>
               )}
