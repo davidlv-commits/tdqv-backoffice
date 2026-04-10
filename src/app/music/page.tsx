@@ -405,6 +405,9 @@ export default function MusicPage() {
     );
   }
 
+  const [uploadingAudio, setUploadingAudio] = useState(false);
+  const [uploadingCover, setUploadingCover] = useState(false);
+
   function renderFilesSection(
     data: Partial<Track>,
     audioFile: File | null,
@@ -415,9 +418,6 @@ export default function MusicPage() {
     onCoverSelect: (file: File | null) => void,
     onFieldChange?: (key: string, value: string) => void
   ) {
-    const [uploadingAudio, setUploadingAudio] = useState(false);
-    const [uploadingCover, setUploadingCover] = useState(false);
-
     const handleAudioUpload = async (file: File) => {
       setUploadingAudio(true);
       try {
