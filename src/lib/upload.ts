@@ -1,11 +1,11 @@
 /**
- * Sube un archivo a R2 usando presigned URL.
- * Paso 1: pide una presigned URL al API route.
- * Paso 2: sube directamente desde el navegador a R2 (sin límite de tamaño).
- * Retorna la URL pública del archivo subido.
+ * Sube un archivo a R2 usando presigned URL con progreso.
  */
-export async function uploadFile(file: File, folder: string): Promise<string> {
-  // Clean filename.
+export async function uploadFile(
+  file: File,
+  folder: string,
+  onProgress?: (percent: number) => void
+): Promise<string> {
   const ext = file.name.split(".").pop() || "";
   const baseName = file.name
     .replace(/\.[^/.]+$/, "")
@@ -15,21 +15,36 @@ export async function uploadFile(file: File, folder: string): Promise<string> {
   const filename = `${baseName}.${ext}`;
 
   // Step 1: Get presigned URL.
+  onProgress?.(0);
   const res = await fetch(
     `/api/upload?folder=${encodeURIComponent(folder)}&filename=${encodeURIComponent(filename)}&contentType=${encodeURIComponent(file.type)}`
   );
-
   if (!res.ok) throw new Error("Failed to get upload URL");
   const { uploadUrl, publicUrl } = await res.json();
 
-  // Step 2: Upload directly to R2.
-  const uploadRes = await fetch(uploadUrl, {
-    method: "PUT",
-    body: file,
-    headers: { "Content-Type": file.type },
+  // Step 2: Upload with progress via XMLHttpRequest.
+  onProgress?.(5);
+  await new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.upload.addEventListener("progress", (e) => {
+      if (e.lengthComputable) {
+        const percent = Math.round((e.loaded / e.total) * 90) + 5; // 5-95%
+        onProgress?.(percent);
+      }
+    });
+    xhr.addEventListener("load", () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        onProgress?.(100);
+        resolve();
+      } else {
+        reject(new Error(`Upload failed: ${xhr.status}`));
+      }
+    });
+    xhr.addEventListener("error", () => reject(new Error("Upload error")));
+    xhr.open("PUT", uploadUrl);
+    xhr.setRequestHeader("Content-Type", file.type);
+    xhr.send(file);
   });
-
-  if (!uploadRes.ok) throw new Error("Upload to R2 failed");
 
   return publicUrl;
 }

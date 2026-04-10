@@ -424,6 +424,8 @@ export default function MusicPage() {
 
   const [uploadingAudio, setUploadingAudio] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
+  const [audioProgress, setAudioProgress] = useState(0);
+  const [coverProgress, setCoverProgress] = useState(0);
   const [saveMsg, setSaveMsg] = useState("");
   // Refs para URLs subidas — evita problemas de closures con setState async.
   const pendingAudioUrl = useRef<string>("");
@@ -441,8 +443,9 @@ export default function MusicPage() {
   ) {
     const handleAudioUpload = async (file: File) => {
       setUploadingAudio(true);
+      setAudioProgress(0);
       try {
-        const url = await uploadFile(file, "tu-de-que-vas");
+        const url = await uploadFile(file, "tu-de-que-vas", setAudioProgress);
         pendingAudioUrl.current = url;
         setEditData(prev => ({...prev, audioUrl: url}));
         setNewTrack(prev => ({...prev, audioUrl: url}));
@@ -451,14 +454,16 @@ export default function MusicPage() {
         console.error("Audio upload error:", e);
       } finally {
         setUploadingAudio(false);
+        setAudioProgress(0);
       }
     };
 
     const handleCoverUpload = async (file: File) => {
       onCoverSelect(file);
       setUploadingCover(true);
+      setCoverProgress(0);
       try {
-        const url = await uploadFile(file, "covers");
+        const url = await uploadFile(file, "covers", setCoverProgress);
         pendingCoverUrl.current = url;
         setEditData(prev => ({...prev, coverUrl: url}));
         setNewTrack(prev => ({...prev, coverUrl: url}));
@@ -466,6 +471,7 @@ export default function MusicPage() {
         console.error("Cover upload error:", e);
       } finally {
         setUploadingCover(false);
+        setCoverProgress(0);
       }
     };
 
@@ -487,8 +493,16 @@ export default function MusicPage() {
                 onChange={e => { const f = e.target.files?.[0]; if (f) handleAudioUpload(f); }} />
               <button type="button" onClick={() => audioInputRef.current?.click()} disabled={uploadingAudio}
                 className="w-full border-2 border-dashed border-zinc-300 rounded-lg py-3 px-4 text-sm text-zinc-500 hover:border-amber-400 hover:text-amber-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-50">
-                {uploadingAudio ? "Subiendo..." : data.audioUrl ? "Cambiar audio" : "Subir audio (.m4a, .mp3)"}
+                {uploadingAudio ? `Subiendo... ${audioProgress}%` : data.audioUrl ? "Cambiar audio" : "Subir audio (.m4a, .mp3)"}
               </button>
+              {uploadingAudio && (
+                <div className="mt-2">
+                  <div className="h-1.5 bg-zinc-200 rounded-full overflow-hidden">
+                    <div className="h-full bg-amber-500 rounded-full transition-all duration-300"
+                      style={{ width: `${audioProgress}%` }} />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -522,6 +536,19 @@ export default function MusicPage() {
                   </div>
                 )}
               </button>
+              {/* Barra de progreso */}
+              {uploadingCover && (
+                <div className="mt-2 w-[120px]">
+                  <div className="h-1.5 bg-zinc-200 rounded-full overflow-hidden">
+                    <div className="h-full bg-amber-500 rounded-full transition-all duration-300"
+                      style={{ width: `${coverProgress}%` }} />
+                  </div>
+                  <p className="text-[10px] text-amber-600 mt-1 text-center">{coverProgress}%</p>
+                </div>
+              )}
+              {!uploadingCover && pendingCoverUrl.current && (
+                <p className="text-[10px] text-green-600 mt-1">Portada subida ✓</p>
+              )}
             </div>
           </div>
         </div>
