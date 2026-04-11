@@ -19,6 +19,9 @@ interface UserRow {
   lastActiveDate: Date | null;
   trialExpiresAt: Date | null;
   referralCode: string;
+  country: string;
+  locale: string;
+  timezone: string;
 }
 
 export default function UsersPage() {
@@ -51,6 +54,9 @@ export default function UsersPage() {
           lastActiveDate: data.lastActiveDate?.toDate() ?? null,
           trialExpiresAt: data.trialExpiresAt?.toDate() ?? null,
           referralCode: data.referralCode ?? "",
+          country: data.country ?? "",
+          locale: data.locale ?? "",
+          timezone: data.timezone ?? "",
         };
       }));
     } catch (e) {
@@ -96,6 +102,7 @@ export default function UsersPage() {
                     <Th label="🎵" onClick={() => handleSort("songsListened")} active={sortBy === "songsListened"} />
                     <Th label="👥" onClick={() => handleSort("validReferrals")} active={sortBy === "validReferrals"} />
                     <Th label="Tier" onClick={() => handleSort("subscriptionTier")} active={sortBy === "subscriptionTier"} />
+                    <Th label="📍" onClick={() => handleSort("country")} active={sortBy === "country"} />
                     <Th label="Último" onClick={() => handleSort("lastActiveDate")} active={sortBy === "lastActiveDate"} />
                     <Th label="Código" />
                   </tr>
@@ -122,6 +129,9 @@ export default function UsersPage() {
                         {u.trialExpiresAt && u.trialExpiresAt > new Date() && (
                           <span className="text-[10px] ml-1 px-1.5 py-0.5 rounded-full bg-green-100 text-green-700">TRIAL</span>
                         )}
+                      </td>
+                      <td className="px-3 py-2 text-xs text-zinc-500" title={u.timezone}>
+                        {u.country || u.locale || "—"}
                       </td>
                       <td className="px-3 py-2 text-xs text-zinc-400">
                         {u.lastActiveDate ? u.lastActiveDate.toLocaleDateString() : "—"}
