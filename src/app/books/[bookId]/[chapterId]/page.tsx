@@ -103,7 +103,7 @@ export default function ChapterEditorPage() {
     <AuthGuard>
       <div className="flex h-screen">
         <Sidebar />
-        <main className="flex-1 overflow-auto bg-slate-50">
+        <main className="flex-1 flex flex-col overflow-hidden bg-slate-50">
           {/* Header */}
           <div className="sticky top-0 z-20 bg-slate-50 border-b border-zinc-200 px-8 py-4">
             <div className="flex items-center justify-between max-w-5xl">
@@ -125,7 +125,7 @@ export default function ChapterEditorPage() {
           </div>
 
           {/* Editor */}
-          <div className="max-w-5xl mx-auto p-8">
+          <div className="max-w-5xl mx-auto px-8 py-4 flex-1 min-h-0">
             {loading ? (
               <p className="text-zinc-500">Cargando capítulo...</p>
             ) : !chapter?.body ? (

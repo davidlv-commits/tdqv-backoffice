@@ -278,9 +278,9 @@ export function ChapterRichEditor({
   }, [editor, selectedTrackId, availableTracks, autoplay, initialVolume, crossfadeFromPrevious, selectedMediaType]);
 
   return (
-    <div>
-      {/* Toolbar */}
-      <div className="flex items-center justify-between border-b border-zinc-200 bg-white rounded-t-xl px-4 py-3 sticky top-0 z-10">
+    <div className="flex flex-col h-[calc(100vh-140px)]">
+      {/* Toolbar — fixed at top */}
+      <div className="flex-shrink-0 flex items-center justify-between border-b border-zinc-200 bg-white rounded-t-xl px-4 py-3 z-10">
         <div className="flex items-center gap-2">
           <Button
             size="sm"
@@ -340,9 +340,9 @@ export function ChapterRichEditor({
         </Button>
       </div>
 
-      {/* Insert media panel */}
+      {/* Insert media panel — fixed below toolbar */}
       {showInsert && (
-        <div className="bg-amber-50 border-b border-amber-200 px-4 py-4 space-y-3">
+        <div className="flex-shrink-0 bg-amber-50 border-b border-amber-200 px-4 py-4 space-y-3">
           {/* Fila 1: Tipo + Contenido */}
           <div className="flex items-end gap-3">
             <div className="w-44">
@@ -443,8 +443,8 @@ export function ChapterRichEditor({
         </div>
       )}
 
-      {/* Editor de texto plano */}
-      <div className="bg-white border border-zinc-200 rounded-b-xl shadow-sm p-8 md:p-12">
+      {/* Editor — scrollable */}
+      <div className="flex-1 overflow-y-auto bg-white border border-zinc-200 rounded-b-xl shadow-sm p-8 md:p-12">
         <EditorContent editor={editor} />
       </div>
     </div>
