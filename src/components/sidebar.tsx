@@ -8,6 +8,7 @@ import { auth } from "@/lib/firebase";
 const MEDIA_ITEMS = [
   { href: "/books", label: "Libros", icon: "📚" },
   { href: "/music", label: "Música", icon: "🎵" },
+  { href: "/music/sync", label: "Sincro LRC", icon: "⏱️" },
   { href: "/images", label: "Imágenes", icon: "🖼️" },
   { href: "/videos", label: "Vídeos", icon: "🎬" },
   { href: "/audios", label: "Audios", icon: "🎙️" },
