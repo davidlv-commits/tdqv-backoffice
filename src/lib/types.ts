@@ -18,7 +18,7 @@ export interface Chapter {
   mediaMomentCount?: number;
 }
 
-export type MediaType = 'music' | 'audio' | 'video' | 'image';
+export type MediaType = 'music' | 'audio' | 'video' | 'image' | 'chat';
 export type DisplayStyle = 'inline' | 'fullscreen' | 'ambient';
 
 export interface MediaMoment {

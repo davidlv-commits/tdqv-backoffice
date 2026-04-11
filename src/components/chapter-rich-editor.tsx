@@ -4,6 +4,7 @@ import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import { MediaBlock } from "./media-block";
+import { ChatBlock } from "./chat-block";
 import { useState, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -94,21 +95,30 @@ export function ChapterRichEditor({
       const hooksHere = hooksByParagraph.get(i);
       if (hooksHere) {
         for (const h of hooksHere) {
-          content.push({
-            type: "mediaBlock",
-            attrs: {
-              mediaType: h.mediaType,
-              mediaId: h.mediaId,
-              title: h.title,
-              mediaUrl: h.mediaUrl,
-              isExclusive: h.isExclusive,
-              displayStyle: h.displayStyle,
-              autoplay: h.autoplay,
-              initialVolume: h.initialVolume,
-              crossfadeWithId: h.crossfadeWithId,
-              crossfadeWithTitle: h.crossfadeWithTitle,
-            },
-          });
+          if (h.mediaType === "chat") {
+            // Chat block.
+            content.push({
+              type: "chatBlock",
+              attrs: { sender: h.mediaId, senderName: h.displayStyle },
+              content: [{ type: "text", text: h.title }],
+            });
+          } else {
+            content.push({
+              type: "mediaBlock",
+              attrs: {
+                mediaType: h.mediaType,
+                mediaId: h.mediaId,
+                title: h.title,
+                mediaUrl: h.mediaUrl,
+                isExclusive: h.isExclusive,
+                displayStyle: h.displayStyle,
+                autoplay: h.autoplay,
+                initialVolume: h.initialVolume,
+                crossfadeWithId: h.crossfadeWithId,
+                crossfadeWithTitle: h.crossfadeWithTitle,
+              },
+            });
+          }
         }
       }
     }
@@ -159,8 +169,24 @@ export function ChapterRichEditor({
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const text = (node.content || []).map((c: any) => c.text || "").join("");
         if (text.trim()) paragraphs.push(text);
+      } else if (node.type === "chatBlock") {
+        // Chat message — extract text content and sender.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const chatText = (node.content || []).map((c: any) => c.text || "").join("");
+        hooks.push({
+          paragraphIndex: paragraphs.length - 1 < 0 ? 0 : paragraphs.length - 1,
+          mediaType: "chat" as MediaType,
+          mediaId: node.attrs?.sender || "mine",
+          title: chatText,
+          mediaUrl: "",
+          isExclusive: false,
+          displayStyle: node.attrs?.senderName || "",
+          autoplay: false,
+          initialVolume: 0,
+          crossfadeWithId: "",
+          crossfadeWithTitle: "",
+        });
       } else if (node.type === "mediaBlock") {
-        // paragraphIndex = number of paragraphs BEFORE this block.
         hooks.push({
           paragraphIndex: paragraphs.length - 1 < 0 ? 0 : paragraphs.length - 1,
           mediaType: (node.attrs?.mediaType || "music") as MediaType,
@@ -197,6 +223,7 @@ export function ChapterRichEditor({
         placeholder: "Escribe el contenido del capítulo...",
       }),
       MediaBlock,
+      ChatBlock,
     ],
     // Initialize with both text AND existing media blocks.
     content: buildEditorContent(initialContent, existingHooks),
@@ -263,8 +290,36 @@ export function ChapterRichEditor({
           >
             + Insertar media
           </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-amber-600 border-amber-300 hover:bg-amber-50"
+            onClick={() => {
+              editor?.chain().focus().insertContent({
+                type: "chatBlock",
+                attrs: { sender: "mine" },
+                content: [{ type: "text", text: "Mensaje de David..." }],
+              }).run();
+            }}
+          >
+            💬 Msg mío
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-purple-600 border-purple-300 hover:bg-purple-50"
+            onClick={() => {
+              editor?.chain().focus().insertContent({
+                type: "chatBlock",
+                attrs: { sender: "theirs" },
+                content: [{ type: "text", text: "Mensaje de ella..." }],
+              }).run();
+            }}
+          >
+            💬 Msg suyo
+          </Button>
           <span className="text-xs text-zinc-400 ml-2">
-            Pon el cursor donde quieras y selecciona el contenido
+            Cursor donde quieras
           </span>
         </div>
         <Button

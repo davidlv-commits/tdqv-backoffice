@@ -162,6 +162,7 @@ export default function MediaPage() {
       audio: "Audio",
       video: "Video",
       image: "Imagen",
+      chat: "Chat",
     };
     return labels[t];
   };
@@ -172,6 +173,7 @@ export default function MediaPage() {
       audio: "bg-blue-500/20 text-blue-400",
       video: "bg-red-500/20 text-red-400",
       image: "bg-green-500/20 text-green-400",
+      chat: "bg-amber-500/20 text-amber-400",
     };
     return colors[t];
   };
