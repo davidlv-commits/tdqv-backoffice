@@ -295,10 +295,14 @@ export function ChapterRichEditor({
             variant="outline"
             className="text-amber-600 border-amber-300 hover:bg-amber-50"
             onClick={() => {
-              editor?.chain().focus().insertContent({
+              if (!editor) return;
+              const { from, to } = editor.state.selection;
+              const selectedText = editor.state.doc.textBetween(from, to, " ");
+              const text = selectedText.trim() || "Mensaje de David...";
+              editor.chain().focus().deleteSelection().insertContent({
                 type: "chatBlock",
                 attrs: { sender: "mine" },
-                content: [{ type: "text", text: "Mensaje de David..." }],
+                content: [{ type: "text", text }],
               }).run();
             }}
           >
@@ -309,10 +313,14 @@ export function ChapterRichEditor({
             variant="outline"
             className="text-purple-600 border-purple-300 hover:bg-purple-50"
             onClick={() => {
-              editor?.chain().focus().insertContent({
+              if (!editor) return;
+              const { from, to } = editor.state.selection;
+              const selectedText = editor.state.doc.textBetween(from, to, " ");
+              const text = selectedText.trim() || "Mensaje de ella...";
+              editor.chain().focus().deleteSelection().insertContent({
                 type: "chatBlock",
                 attrs: { sender: "theirs" },
-                content: [{ type: "text", text: "Mensaje de ella..." }],
+                content: [{ type: "text", text }],
               }).run();
             }}
           >
