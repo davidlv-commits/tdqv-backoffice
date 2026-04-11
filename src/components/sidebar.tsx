@@ -22,6 +22,7 @@ const ANALYTICS_ITEMS = [
   { href: "/analytics/reading", label: "Lectura", icon: "📖" },
   { href: "/analytics/music", label: "Música", icon: "🎧" },
   { href: "/analytics/milestones", label: "Hitos y Premios", icon: "🎁" },
+  { href: "/analytics/reports", label: "Informes", icon: "📉" },
 ];
 
 export function Sidebar() {
