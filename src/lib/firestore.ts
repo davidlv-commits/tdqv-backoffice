@@ -229,9 +229,9 @@ export async function deleteTrack(id: string) {
 // ═══ Videos ═══
 
 export async function getVideos(): Promise<Video[]> {
-  const q = query(collection(db, 'videos'), orderBy('order'));
-  const snap = await getDocs(q);
-  return snap.docs.map(d => ({ id: d.id, ...d.data() } as Video));
+  const snap = await getDocs(collection(db, 'videos'));
+  const videos = snap.docs.map(d => ({ id: d.id, ...d.data() } as Video));
+  return videos.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 }
 
 export async function saveVideo(video: Partial<Video> & { id: string }) {

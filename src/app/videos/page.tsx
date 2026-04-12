@@ -18,6 +18,7 @@ export default function VideosPage() {
   const [showForm, setShowForm] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editData, setEditData] = useState<Partial<Video>>({});
+  const [previewId, setPreviewId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [chapters, setChapters] = useState<{id: string; label: string; title: string}[]>([]);
 
@@ -138,9 +139,19 @@ export default function VideosPage() {
               className="bg-white border-zinc-300 text-zinc-900"
             />
             {(data.youtubeId as string) && (
-              <div className="mt-2 rounded-lg overflow-hidden border border-zinc-200">
-                <img src={getYoutubeThumbnail(data.youtubeId as string)} alt="Thumbnail"
-                  className="w-full h-40 object-cover" />
+              <div className="mt-3 space-y-2">
+                <div className="rounded-lg overflow-hidden border border-zinc-200 aspect-video">
+                  <iframe
+                    width="100%"
+                    height="100%"
+                    src={`https://www.youtube.com/embed/${data.youtubeId}`}
+                    title="Preview"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                    className="block"
+                  />
+                </div>
+                <p className="text-[10px] text-zinc-400">Si el video se reproduce aqui arriba, funcionara tambien en la App.</p>
               </div>
             )}
           </div>
@@ -267,21 +278,39 @@ export default function VideosPage() {
                       expandedId === v.id ? "border-amber-500/50 rounded-b-none shadow-sm" : "border-zinc-200 hover:border-zinc-300"
                     }`}>
                     {/* Thumbnail */}
-                    <div className="w-24 h-14 rounded-lg overflow-hidden bg-zinc-100 flex-shrink-0">
+                    <div className="w-24 h-14 rounded-lg overflow-hidden bg-zinc-100 flex-shrink-0 relative group/thumb">
                       {v.thumbnailUrl ? (
                         <img src={v.thumbnailUrl} alt="" className="w-full h-full object-cover" />
+                      ) : v.youtubeId ? (
+                        <img src={`https://img.youtube.com/vi/${v.youtubeId}/hqdefault.jpg`} alt="" className="w-full h-full object-cover" />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center text-zinc-300">🎬</div>
+                        <div className="w-full h-full flex items-center justify-center text-zinc-300 text-2xl">🎬</div>
                       )}
+                      {/* Play overlay */}
+                      <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover/thumb:opacity-100 transition-opacity">
+                        <div className="w-8 h-8 rounded-full bg-white/90 flex items-center justify-center">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="#333"><polygon points="5 3 19 12 5 21 5 3" /></svg>
+                        </div>
+                      </div>
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-zinc-900 truncate">{v.title}</p>
                       <p className="text-xs text-zinc-500">
-                        {v.source === "youtube" ? "📺 YouTube" : v.source === "r2" ? "☁️ R2" : "🔗 URL"}
+                        {v.source === "youtube" ? `YouTube · ${v.youtubeId || ""}` : v.source === "r2" ? "R2" : "URL"}
                         {v.description && ` · ${v.description.substring(0, 50)}`}
                       </p>
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
+                      {v.youtubeId && (
+                        <button
+                          onClick={e => { e.stopPropagation(); setPreviewId(previewId === v.id ? null : v.id); }}
+                          className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
+                            previewId === v.id ? "bg-red-50 border-red-400 text-red-600" : "bg-white border-zinc-200 text-zinc-600 hover:border-red-400 hover:text-red-600"
+                          }`}
+                        >
+                          {previewId === v.id ? "Cerrar preview" : "▶ Probar"}
+                        </button>
+                      )}
                       {v.isLockedByChapter && <Badge className="bg-amber-100 text-amber-700">Bloqueado</Badge>}
                       {v.active ? <Badge className="bg-green-100 text-green-700">Activo</Badge>
                         : <Badge className="bg-zinc-100 text-zinc-500">Inactivo</Badge>}
@@ -289,6 +318,23 @@ export default function VideosPage() {
                         className="text-zinc-400 hover:text-red-500 text-sm">Eliminar</button>
                     </div>
                   </div>
+
+                  {/* Inline preview */}
+                  {previewId === v.id && v.youtubeId && (
+                    <div className="bg-black rounded-b-lg overflow-hidden border border-zinc-200 border-t-0" style={{ marginTop: expandedId === v.id ? 0 : undefined }}>
+                      <div className="aspect-video max-h-[400px]">
+                        <iframe
+                          width="100%"
+                          height="100%"
+                          src={`https://www.youtube.com/embed/${v.youtubeId}?autoplay=1`}
+                          title={v.title}
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                          className="block"
+                        />
+                      </div>
+                    </div>
+                  )}
 
                   {/* Edit form */}
                   {expandedId === v.id && (

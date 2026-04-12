@@ -10,8 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { getTracks, saveTrack, deleteTrack, getBooks, getChapters, getAlbums, saveAlbum, getVideos, saveVideo, addVideo, deleteVideo, type Album } from "@/lib/firestore";
-import type { Track, Chapter, Book, Video } from "@/lib/types";
+import { getTracks, saveTrack, deleteTrack, getBooks, getChapters, getAlbums, saveAlbum, type Album } from "@/lib/firestore";
+import type { Track, Chapter, Book } from "@/lib/types";
 import { addDoc, collection, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import {
@@ -64,17 +64,6 @@ export default function MusicPage() {
   const [albumCoverProgress, setAlbumCoverProgress] = useState(0);
   const albumCoverRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
-  // ─── Videos state ───
-  const [videos, setVideos] = useState<Video[]>([]);
-  const [showNewVideo, setShowNewVideo] = useState(false);
-  const [newVideo, setNewVideo] = useState<Partial<Video>>({
-    title: "", youtubeId: "", description: "", source: "youtube", order: 0, active: true,
-  });
-  const [savingVideo, setSavingVideo] = useState(false);
-  const [editingVideoId, setEditingVideoId] = useState<string | null>(null);
-  const [editVideoData, setEditVideoData] = useState<Partial<Video>>({});
-  const [deletingVideo, setDeletingVideo] = useState<string | null>(null);
-
   // File picker refs for edit form
   const editAudioRef = useRef<HTMLInputElement>(null);
   const editCoverRef = useRef<HTMLInputElement>(null);
@@ -105,12 +94,11 @@ export default function MusicPage() {
   const [newAudioFile, setNewAudioFile] = useState<File | null>(null);
   const [newCoverFile, setNewCoverFile] = useState<File | null>(null);
 
-  // Load tracks, album covers, and videos
+  // Load tracks and album covers
   useEffect(() => {
-    Promise.all([getTracks(), getAlbums(), getVideos()])
-      .then(([t, albums, v]) => {
+    Promise.all([getTracks(), getAlbums()])
+      .then(([t, albums]) => {
         setTracks(t);
-        setVideos(v);
         const covers: Record<string, string> = {};
         for (const a of albums) {
           if (a.coverUrl) covers[a.name] = a.coverUrl;
@@ -1048,274 +1036,6 @@ export default function MusicPage() {
               ))}
             </div>
           )}
-          {/* ═══════════════════════════════════════ */}
-          {/* VIDEOS SECTION                         */}
-          {/* ═══════════════════════════════════════ */}
-          <div className="mt-12 border-t border-zinc-200 pt-8">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-zinc-900">
-                Videos
-              </h2>
-              <Button
-                onClick={() => {
-                  setShowNewVideo(!showNewVideo);
-                  setNewVideo({ title: "", youtubeId: "", description: "", source: "youtube", order: videos.length, active: true });
-                }}
-                className="bg-red-600 hover:bg-red-700"
-              >
-                {showNewVideo ? "Cancelar" : "+ Añadir video"}
-              </Button>
-            </div>
-
-            {/* New video form */}
-            {showNewVideo && (
-              <div className="bg-white border border-zinc-200 rounded-xl shadow-sm p-5 mb-6 space-y-4">
-                <h3 className="font-semibold text-sm text-zinc-700">Nuevo video</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>Titulo</Label>
-                    <Input
-                      value={newVideo.title || ""}
-                      onChange={(e) => setNewVideo(p => ({ ...p, title: e.target.value }))}
-                      placeholder="La carta más bonita del mundo"
-                    />
-                  </div>
-                  <div>
-                    <Label>YouTube ID</Label>
-                    <Input
-                      value={newVideo.youtubeId || ""}
-                      onChange={(e) => setNewVideo(p => ({ ...p, youtubeId: e.target.value }))}
-                      placeholder="jVmXHY6X0vQ"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <Label>Descripcion (opcional)</Label>
-                  <Input
-                    value={newVideo.description || ""}
-                    onChange={(e) => setNewVideo(p => ({ ...p, description: e.target.value }))}
-                    placeholder="Videoclip oficial"
-                  />
-                </div>
-                {/* YouTube preview */}
-                {newVideo.youtubeId && (
-                  <div className="rounded-lg overflow-hidden border border-zinc-200">
-                    <iframe
-                      width="100%"
-                      height="315"
-                      src={`https://www.youtube.com/embed/${newVideo.youtubeId}`}
-                      title={newVideo.title || "Preview"}
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      allowFullScreen
-                      className="block"
-                    />
-                  </div>
-                )}
-                <div className="flex gap-2 pt-2">
-                  <Button
-                    onClick={async () => {
-                      if (!newVideo.title || !newVideo.youtubeId) return;
-                      setSavingVideo(true);
-                      try {
-                        const thumbnailUrl = `https://img.youtube.com/vi/${newVideo.youtubeId}/maxresdefault.jpg`;
-                        await addVideo({
-                          title: newVideo.title!,
-                          source: "youtube",
-                          youtubeId: newVideo.youtubeId,
-                          description: newVideo.description || "",
-                          thumbnailUrl,
-                          order: newVideo.order ?? videos.length,
-                          active: true,
-                        });
-                        const refreshed = await getVideos();
-                        setVideos(refreshed);
-                        setShowNewVideo(false);
-                      } catch (e) {
-                        console.error("Error creating video:", e);
-                      }
-                      setSavingVideo(false);
-                    }}
-                    disabled={savingVideo || !newVideo.title || !newVideo.youtubeId}
-                    className="bg-red-600 hover:bg-red-700"
-                  >
-                    {savingVideo ? "Guardando..." : "Crear video"}
-                  </Button>
-                  <Button variant="ghost" onClick={() => setShowNewVideo(false)}>Cancelar</Button>
-                </div>
-              </div>
-            )}
-
-            {/* Video list */}
-            {videos.length === 0 && !showNewVideo ? (
-              <div className="bg-white border border-zinc-200 rounded-xl p-8 text-center shadow-sm">
-                <p className="text-zinc-600 mb-2">No hay videos</p>
-                <p className="text-sm text-zinc-400">Usa el boton de arriba para añadir el primer video.</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {videos.map((video, idx) => (
-                  <div key={video.id} className="bg-white border border-zinc-200 rounded-xl shadow-sm overflow-hidden">
-                    <div className="flex items-center gap-4 p-4">
-                      {/* Thumbnail */}
-                      <div className="w-32 h-20 flex-shrink-0 rounded-lg overflow-hidden bg-zinc-100 relative">
-                        {video.youtubeId ? (
-                          <img
-                            src={`https://img.youtube.com/vi/${video.youtubeId}/hqdefault.jpg`}
-                            alt={video.title}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="flex items-center justify-center h-full text-zinc-400">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <polygon points="5 3 19 12 5 21 5 3" />
-                            </svg>
-                          </div>
-                        )}
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="w-8 h-8 rounded-full bg-black/50 flex items-center justify-center">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
-                              <polygon points="5 3 19 12 5 21 5 3" />
-                            </svg>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Info */}
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-zinc-900 truncate">{video.title}</p>
-                        <p className="text-sm text-zinc-500">
-                          {video.source === "youtube" ? "YouTube" : video.source}
-                          {video.youtubeId ? ` · ${video.youtubeId}` : ""}
-                        </p>
-                        {video.description && (
-                          <p className="text-xs text-zinc-400 mt-1 truncate">{video.description}</p>
-                        )}
-                      </div>
-
-                      {/* Actions */}
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <Badge className={video.active ? "bg-green-500/20 text-green-600" : "bg-zinc-200 text-zinc-500"}>
-                          {video.active ? "Activo" : "Inactivo"}
-                        </Badge>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            if (editingVideoId === video.id) {
-                              setEditingVideoId(null);
-                            } else {
-                              setEditingVideoId(video.id);
-                              setEditVideoData({ ...video });
-                            }
-                          }}
-                          className="text-xs h-8"
-                        >
-                          {editingVideoId === video.id ? "Cerrar" : "Editar"}
-                        </Button>
-                        <button
-                          onClick={async () => {
-                            if (!confirm("¿Eliminar este video?")) return;
-                            setDeletingVideo(video.id);
-                            await deleteVideo(video.id);
-                            setVideos(prev => prev.filter(v => v.id !== video.id));
-                            setDeletingVideo(null);
-                          }}
-                          disabled={deletingVideo === video.id}
-                          className="text-zinc-600 hover:text-red-400 text-sm disabled:opacity-50"
-                        >
-                          {deletingVideo === video.id ? "..." : "Eliminar"}
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Edit form */}
-                    {editingVideoId === video.id && (
-                      <div className="border-t border-zinc-200 p-4 bg-zinc-50 space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <Label>Titulo</Label>
-                            <Input
-                              value={editVideoData.title || ""}
-                              onChange={(e) => setEditVideoData(p => ({ ...p, title: e.target.value }))}
-                            />
-                          </div>
-                          <div>
-                            <Label>YouTube ID</Label>
-                            <Input
-                              value={editVideoData.youtubeId || ""}
-                              onChange={(e) => setEditVideoData(p => ({ ...p, youtubeId: e.target.value }))}
-                            />
-                          </div>
-                        </div>
-                        <div>
-                          <Label>Descripcion</Label>
-                          <Input
-                            value={editVideoData.description || ""}
-                            onChange={(e) => setEditVideoData(p => ({ ...p, description: e.target.value }))}
-                          />
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <div className="flex items-center gap-2">
-                            <Switch
-                              checked={editVideoData.active ?? true}
-                              onCheckedChange={(v) => setEditVideoData(p => ({ ...p, active: v }))}
-                            />
-                            <Label>Activo</Label>
-                          </div>
-                        </div>
-                        {/* YouTube preview */}
-                        {editVideoData.youtubeId && (
-                          <div className="rounded-lg overflow-hidden border border-zinc-200">
-                            <iframe
-                              width="100%"
-                              height="315"
-                              src={`https://www.youtube.com/embed/${editVideoData.youtubeId}`}
-                              title={editVideoData.title || "Preview"}
-                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                              allowFullScreen
-                              className="block"
-                            />
-                          </div>
-                        )}
-                        <div className="flex gap-2">
-                          <Button
-                            onClick={async () => {
-                              setSavingVideo(true);
-                              try {
-                                const thumbnailUrl = editVideoData.youtubeId
-                                  ? `https://img.youtube.com/vi/${editVideoData.youtubeId}/maxresdefault.jpg`
-                                  : editVideoData.thumbnailUrl;
-                                await saveVideo({
-                                  id: video.id,
-                                  title: editVideoData.title,
-                                  youtubeId: editVideoData.youtubeId,
-                                  description: editVideoData.description,
-                                  thumbnailUrl,
-                                  active: editVideoData.active,
-                                });
-                                const refreshed = await getVideos();
-                                setVideos(refreshed);
-                                setEditingVideoId(null);
-                              } catch (e) {
-                                console.error("Error saving video:", e);
-                              }
-                              setSavingVideo(false);
-                            }}
-                            disabled={savingVideo}
-                            className="bg-red-600 hover:bg-red-700"
-                          >
-                            {savingVideo ? "Guardando..." : "Guardar"}
-                          </Button>
-                          <Button variant="ghost" onClick={() => setEditingVideoId(null)}>Cancelar</Button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
         </main>
       </div>
     </AuthGuard>
