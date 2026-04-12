@@ -76,12 +76,13 @@ export function ChapterRichEditor({
 
   /**
    * Builds TipTap-compatible JSON content from body text + existing hooks.
-   * Media blocks are inserted AFTER the paragraph at their paragraphIndex.
+   * paragraphIndex = -1 → block appears BEFORE the first paragraph.
+   * paragraphIndex = N (≥0) → block appears AFTER paragraph N.
    */
   const buildEditorContent = (body: string, hooks: (MediaHook & { paragraphIndex?: number })[]) => {
     const paragraphs = body.split("\n\n").filter((p) => p.trim());
 
-    // Group hooks by paragraphIndex.
+    // Group hooks by paragraphIndex (-1 means "before first paragraph").
     const hooksByParagraph = new Map<number, MediaHook[]>();
     hooks.forEach((h, i) => {
       const idx = h.paragraphIndex ?? i;
@@ -89,7 +90,38 @@ export function ChapterRichEditor({
       hooksByParagraph.get(idx)!.push(h);
     });
 
+    const buildHookNode = (h: MediaHook): Record<string, unknown> => {
+      if (h.mediaType === "chat") {
+        return {
+          type: "chatBlock",
+          attrs: { sender: h.mediaId, senderName: h.displayStyle },
+          content: [{ type: "text", text: h.title }],
+        };
+      }
+      return {
+        type: "mediaBlock",
+        attrs: {
+          mediaType: h.mediaType,
+          mediaId: h.mediaId,
+          title: h.title,
+          mediaUrl: h.mediaUrl,
+          isExclusive: h.isExclusive,
+          displayStyle: h.displayStyle,
+          autoplay: h.autoplay,
+          initialVolume: h.initialVolume,
+          crossfadeWithId: h.crossfadeWithId,
+          crossfadeWithTitle: h.crossfadeWithTitle,
+        },
+      };
+    };
+
     const content: Record<string, unknown>[] = [];
+
+    // Insert hooks with paragraphIndex === -1 BEFORE any paragraphs.
+    const hooksBefore = hooksByParagraph.get(-1);
+    if (hooksBefore) {
+      for (const h of hooksBefore) content.push(buildHookNode(h));
+    }
 
     for (let i = 0; i < paragraphs.length; i++) {
       content.push({
@@ -97,58 +129,17 @@ export function ChapterRichEditor({
         content: [{ type: "text", text: paragraphs[i] }],
       });
 
-      // Insert media blocks after this paragraph.
+      // Insert media/chat blocks after this paragraph.
       const hooksHere = hooksByParagraph.get(i);
       if (hooksHere) {
-        for (const h of hooksHere) {
-          if (h.mediaType === "chat") {
-            // Chat block.
-            content.push({
-              type: "chatBlock",
-              attrs: { sender: h.mediaId, senderName: h.displayStyle },
-              content: [{ type: "text", text: h.title }],
-            });
-          } else {
-            content.push({
-              type: "mediaBlock",
-              attrs: {
-                mediaType: h.mediaType,
-                mediaId: h.mediaId,
-                title: h.title,
-                mediaUrl: h.mediaUrl,
-                isExclusive: h.isExclusive,
-                displayStyle: h.displayStyle,
-                autoplay: h.autoplay,
-                initialVolume: h.initialVolume,
-                crossfadeWithId: h.crossfadeWithId,
-                crossfadeWithTitle: h.crossfadeWithTitle,
-              },
-            });
-          }
-        }
+        for (const h of hooksHere) content.push(buildHookNode(h));
       }
     }
 
     // Hooks that point beyond the text (appended at the end).
     for (const [idx, hooksArr] of hooksByParagraph.entries()) {
       if (idx >= paragraphs.length) {
-        for (const h of hooksArr) {
-          content.push({
-            type: "mediaBlock",
-            attrs: {
-              mediaType: h.mediaType,
-              mediaId: h.mediaId,
-              title: h.title,
-              mediaUrl: h.mediaUrl,
-              isExclusive: h.isExclusive,
-              displayStyle: h.displayStyle,
-              autoplay: h.autoplay,
-              initialVolume: h.initialVolume,
-              crossfadeWithId: h.crossfadeWithId,
-              crossfadeWithTitle: h.crossfadeWithTitle,
-            },
-          });
-        }
+        for (const h of hooksArr) content.push(buildHookNode(h));
       }
     }
 
@@ -177,10 +168,11 @@ export function ChapterRichEditor({
         if (text.trim()) paragraphs.push(text);
       } else if (node.type === "chatBlock") {
         // Chat message — extract text content and sender.
+        // paragraphIndex -1 means "before first paragraph".
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const chatText = (node.content || []).map((c: any) => c.text || "").join("");
         hooks.push({
-          paragraphIndex: paragraphs.length - 1 < 0 ? 0 : paragraphs.length - 1,
+          paragraphIndex: paragraphs.length === 0 ? -1 : paragraphs.length - 1,
           mediaType: "chat" as MediaType,
           mediaId: node.attrs?.sender || "mine",
           title: chatText,
@@ -194,7 +186,7 @@ export function ChapterRichEditor({
         });
       } else if (node.type === "mediaBlock") {
         hooks.push({
-          paragraphIndex: paragraphs.length - 1 < 0 ? 0 : paragraphs.length - 1,
+          paragraphIndex: paragraphs.length === 0 ? -1 : paragraphs.length - 1,
           mediaType: (node.attrs?.mediaType || "music") as MediaType,
           mediaId: node.attrs?.mediaId || "",
           title: node.attrs?.title || "",
@@ -432,6 +424,25 @@ export function ChapterRichEditor({
             }}
           >
             💬 Msg suyo
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-pink-600 border-pink-300 hover:bg-pink-50"
+            onClick={() => {
+              if (!editor) return;
+              const { from, to } = editor.state.selection;
+              const selectedText = editor.state.doc.textBetween(from, to, " ");
+              if (!selectedText.trim()) {
+                alert("Selecciona primero la palabra o frase que quieres censurar");
+                return;
+              }
+              // Wrap selected text with censored markup.
+              const censored = `{{censurado:${selectedText}}}`;
+              editor.chain().focus().deleteSelection().insertContent(censored).run();
+            }}
+          >
+            🔒 Censurar
           </Button>
           <div className="w-px h-6 bg-zinc-200 mx-1" />
           {onSplit && (
