@@ -143,13 +143,17 @@ export default function MusicPage() {
     return Array.from(styles).sort();
   }, [tracks]);
 
-  // Group tracks by album
+  // Group tracks by album, sorted by order within each group
   const albumGroups = useMemo(() => {
     const groups: Record<string, Track[]> = {};
     for (const track of tracks) {
       const album = track.album || "Sin album";
       if (!groups[album]) groups[album] = [];
       groups[album].push(track);
+    }
+    // Sort tracks within each album by order.
+    for (const key of Object.keys(groups)) {
+      groups[key].sort((a, b) => a.order - b.order);
     }
     const sorted = Object.entries(groups).sort(([a], [b]) => {
       const aIsInstr = a.toLowerCase().includes("instrumental");
@@ -191,6 +195,44 @@ export default function MusicPage() {
     }
     setUploadingAlbumCover(null);
     setAlbumCoverProgress(0);
+  }, []);
+
+  const handleMoveTrack = useCallback(async (albumTracks: Track[], index: number, direction: "up" | "down") => {
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= albumTracks.length) return;
+
+    const trackA = albumTracks[index];
+    const trackB = albumTracks[targetIndex];
+
+    // Swap orders.
+    const orderA = trackA.order;
+    const orderB = trackB.order;
+
+    // If they have the same order, assign sequential ones.
+    const newOrderA = orderA === orderB
+      ? (direction === "up" ? orderB - 1 : orderB + 1)
+      : orderB;
+    const newOrderB = orderA === orderB
+      ? orderA
+      : orderA;
+
+    try {
+      await Promise.all([
+        saveTrack({ id: trackA.id, order: newOrderA }),
+        saveTrack({ id: trackB.id, order: newOrderB }),
+      ]);
+      setTracks((prev) =>
+        prev
+          .map((t) => {
+            if (t.id === trackA.id) return { ...t, order: newOrderA };
+            if (t.id === trackB.id) return { ...t, order: newOrderB };
+            return t;
+          })
+          .sort((a, b) => a.order - b.order)
+      );
+    } catch (e) {
+      console.error("Error reordering:", e);
+    }
   }, []);
 
   const handleExpand = (track: Track) => {
@@ -441,15 +483,6 @@ export default function MusicPage() {
                 <option key={s} value={s} />
               ))}
             </datalist>
-          </div>
-          <div>
-            <Label className="text-xs text-zinc-500">Orden</Label>
-            <Input
-              type="number"
-              value={data.order ?? 0}
-              onChange={(e) => setField("order", parseInt(e.target.value) || 0)}
-              className="bg-white border-zinc-300 text-zinc-900"
-            />
           </div>
         </div>
       </div>
@@ -889,35 +922,70 @@ export default function MusicPage() {
                   {/* Album tracks */}
                   {!collapsedAlbums.has(albumName) && (
                     <div className="space-y-2">
-                      {albumTracks.map((track) => (
+                      {albumTracks.map((track, idx) => (
                         <div key={track.id}>
                           {/* Track row */}
                           <div
-                            onClick={() => handleExpand(track)}
-                            className={`flex items-center gap-4 bg-white border rounded-lg px-5 py-4 cursor-pointer transition-all ${
+                            className={`flex items-center gap-2 bg-white border rounded-lg px-3 py-3 transition-all ${
                               expandedId === track.id
                                 ? "border-amber-500/50 rounded-b-none shadow-sm"
                                 : "border-zinc-200 hover:border-zinc-300 hover:shadow-sm"
                             }`}
                           >
-                            <span className="text-amber-600/60 font-mono text-sm w-6">
-                              {track.order}
+                            {/* Reorder buttons */}
+                            <div className="flex flex-col gap-0.5 flex-shrink-0">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleMoveTrack(albumTracks, idx, "up");
+                                }}
+                                disabled={idx === 0}
+                                className="text-zinc-400 hover:text-amber-600 disabled:opacity-20 disabled:hover:text-zinc-400 p-0.5"
+                                title="Subir"
+                              >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                  <path d="M18 15l-6-6-6 6" strokeLinecap="round" strokeLinejoin="round"/>
+                                </svg>
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleMoveTrack(albumTracks, idx, "down");
+                                }}
+                                disabled={idx === albumTracks.length - 1}
+                                className="text-zinc-400 hover:text-amber-600 disabled:opacity-20 disabled:hover:text-zinc-400 p-0.5"
+                                title="Bajar"
+                              >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                  <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round"/>
+                                </svg>
+                              </button>
+                            </div>
+                            {/* Position number */}
+                            <span className="text-amber-600/60 font-mono text-sm w-6 text-center flex-shrink-0">
+                              {idx + 1}
                             </span>
-                            {track.coverUrl && (
-                              <img
-                                src={track.coverUrl}
-                                alt=""
-                                className="w-10 h-10 rounded object-cover"
-                              />
-                            )}
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium text-zinc-900 truncate">
-                                {track.title}
-                              </p>
-                              <p className="text-sm text-zinc-500 truncate">
-                                {track.artist}
-                                {track.style ? ` \u00B7 ${track.style}` : ""}
-                              </p>
+                            {/* Clickable content area */}
+                            <div
+                              onClick={() => handleExpand(track)}
+                              className="flex items-center gap-4 flex-1 min-w-0 cursor-pointer"
+                            >
+                              {track.coverUrl && (
+                                <img
+                                  src={track.coverUrl}
+                                  alt=""
+                                  className="w-10 h-10 rounded object-cover flex-shrink-0"
+                                />
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium text-zinc-900 truncate">
+                                  {track.title}
+                                </p>
+                                <p className="text-sm text-zinc-500 truncate">
+                                  {track.artist}
+                                  {track.style ? ` \u00B7 ${track.style}` : ""}
+                                </p>
+                              </div>
                             </div>
                             <div className="flex items-center gap-2 flex-shrink-0">
                               {track.isLockedByChapter && (
