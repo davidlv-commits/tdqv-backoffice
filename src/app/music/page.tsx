@@ -14,6 +14,22 @@ import { getTracks, saveTrack, deleteTrack, getBooks, getChapters, getAlbums, sa
 import type { Track, Chapter, Book } from "@/lib/types";
 import { addDoc, collection, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 // Chapter with book info for display
 interface ChapterOption {
@@ -197,43 +213,49 @@ export default function MusicPage() {
     setAlbumCoverProgress(0);
   }, []);
 
-  const handleMoveTrack = useCallback(async (albumTracks: Track[], index: number, direction: "up" | "down") => {
-    const targetIndex = direction === "up" ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= albumTracks.length) return;
+  const handleDragEnd = useCallback(async (event: DragEndEvent, albumTracks: Track[]) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
 
-    const trackA = albumTracks[index];
-    const trackB = albumTracks[targetIndex];
+    const oldIndex = albumTracks.findIndex((t) => t.id === active.id);
+    const newIndex = albumTracks.findIndex((t) => t.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
 
-    // Swap orders.
-    const orderA = trackA.order;
-    const orderB = trackB.order;
+    // Build new order: move the item from oldIndex to newIndex.
+    const reordered = [...albumTracks];
+    const [moved] = reordered.splice(oldIndex, 1);
+    reordered.splice(newIndex, 0, moved);
 
-    // If they have the same order, assign sequential ones.
-    const newOrderA = orderA === orderB
-      ? (direction === "up" ? orderB - 1 : orderB + 1)
-      : orderB;
-    const newOrderB = orderA === orderB
-      ? orderA
-      : orderA;
+    // Assign sequential order values.
+    const updates: { id: string; order: number }[] = [];
+    reordered.forEach((track, i) => {
+      const newOrder = i + 1;
+      if (track.order !== newOrder) {
+        updates.push({ id: track.id, order: newOrder });
+      }
+    });
 
+    // Optimistic update.
+    setTracks((prev) => {
+      const updated = prev.map((t) => {
+        const upd = updates.find((u) => u.id === t.id);
+        return upd ? { ...t, order: upd.order } : t;
+      });
+      return updated.sort((a, b) => a.order - b.order);
+    });
+
+    // Persist to Firestore.
     try {
-      await Promise.all([
-        saveTrack({ id: trackA.id, order: newOrderA }),
-        saveTrack({ id: trackB.id, order: newOrderB }),
-      ]);
-      setTracks((prev) =>
-        prev
-          .map((t) => {
-            if (t.id === trackA.id) return { ...t, order: newOrderA };
-            if (t.id === trackB.id) return { ...t, order: newOrderB };
-            return t;
-          })
-          .sort((a, b) => a.order - b.order)
-      );
+      await Promise.all(updates.map((u) => saveTrack(u)));
     } catch (e) {
       console.error("Error reordering:", e);
     }
   }, []);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
 
   const handleExpand = (track: Track) => {
     if (expandedId === track.id) {
@@ -919,121 +941,29 @@ export default function MusicPage() {
                     </div>
                   </div>
 
-                  {/* Album tracks */}
+                  {/* Album tracks — drag & drop reorder */}
                   {!collapsedAlbums.has(albumName) && (
+                    <DndContext
+                      sensors={sensors}
+                      collisionDetection={closestCenter}
+                      onDragEnd={(e) => handleDragEnd(e, albumTracks)}
+                    >
+                      <SortableContext
+                        items={albumTracks.map((t) => t.id)}
+                        strategy={verticalListSortingStrategy}
+                      >
                     <div className="space-y-2">
                       {albumTracks.map((track, idx) => (
-                        <div key={track.id}>
-                          {/* Track row */}
-                          <div
-                            className={`flex items-center gap-2 bg-white border rounded-lg px-3 py-3 transition-all ${
-                              expandedId === track.id
-                                ? "border-amber-500/50 rounded-b-none shadow-sm"
-                                : "border-zinc-200 hover:border-zinc-300 hover:shadow-sm"
-                            }`}
-                          >
-                            {/* Reorder buttons */}
-                            <div className="flex flex-col gap-0.5 flex-shrink-0">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleMoveTrack(albumTracks, idx, "up");
-                                }}
-                                disabled={idx === 0}
-                                className="text-zinc-400 hover:text-amber-600 disabled:opacity-20 disabled:hover:text-zinc-400 p-0.5"
-                                title="Subir"
-                              >
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                  <path d="M18 15l-6-6-6 6" strokeLinecap="round" strokeLinejoin="round"/>
-                                </svg>
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleMoveTrack(albumTracks, idx, "down");
-                                }}
-                                disabled={idx === albumTracks.length - 1}
-                                className="text-zinc-400 hover:text-amber-600 disabled:opacity-20 disabled:hover:text-zinc-400 p-0.5"
-                                title="Bajar"
-                              >
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                  <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round"/>
-                                </svg>
-                              </button>
-                            </div>
-                            {/* Position number */}
-                            <span className="text-amber-600/60 font-mono text-sm w-6 text-center flex-shrink-0">
-                              {idx + 1}
-                            </span>
-                            {/* Clickable content area */}
-                            <div
-                              onClick={() => handleExpand(track)}
-                              className="flex items-center gap-4 flex-1 min-w-0 cursor-pointer"
-                            >
-                              {track.coverUrl && (
-                                <img
-                                  src={track.coverUrl}
-                                  alt=""
-                                  className="w-10 h-10 rounded object-cover flex-shrink-0"
-                                />
-                              )}
-                              <div className="flex-1 min-w-0">
-                                <p className="font-medium text-zinc-900 truncate">
-                                  {track.title}
-                                </p>
-                                <p className="text-sm text-zinc-500 truncate">
-                                  {track.artist}
-                                  {track.style ? ` \u00B7 ${track.style}` : ""}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2 flex-shrink-0">
-                              {track.isLockedByChapter && (
-                                <Badge
-                                  variant="outline"
-                                  className="text-amber-500 border-amber-400/30"
-                                >
-                                  Bloqueado
-                                </Badge>
-                              )}
-                              {track.isInstrumental && (
-                                <Badge
-                                  variant="outline"
-                                  className="text-purple-400 border-purple-400/30"
-                                >
-                                  Instrumental
-                                </Badge>
-                              )}
-                              {track.lyrics && (
-                                <Badge
-                                  variant="outline"
-                                  className="text-blue-400 border-blue-400/30"
-                                >
-                                  Letra
-                                </Badge>
-                              )}
-                              {track.active ? (
-                                <Badge className="bg-green-500/20 text-green-400">
-                                  Activo
-                                </Badge>
-                              ) : (
-                                <Badge className="bg-zinc-700 text-zinc-400">
-                                  Inactivo
-                                </Badge>
-                              )}
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDelete(track.id);
-                                }}
-                                disabled={deleting === track.id}
-                                className="text-zinc-600 hover:text-red-400 text-sm ml-2 disabled:opacity-50"
-                              >
-                                {deleting === track.id ? "..." : "Eliminar"}
-                              </button>
-                            </div>
-                          </div>
-
+                        <SortableTrackRow
+                          key={track.id}
+                          id={track.id}
+                          track={track}
+                          index={idx}
+                          isExpanded={expandedId === track.id}
+                          deleting={deleting === track.id}
+                          onExpand={() => handleExpand(track)}
+                          onDelete={() => handleDelete(track.id)}
+                        >
                           {/* Expanded edit form */}
                           {expandedId === track.id && (
                             <div className="bg-zinc-50 border border-zinc-200 border-t-0 rounded-b-lg p-5 space-y-6">
@@ -1096,9 +1026,11 @@ export default function MusicPage() {
                               </div>
                             </div>
                           )}
-                        </div>
+                        </SortableTrackRow>
                       ))}
                     </div>
+                      </SortableContext>
+                    </DndContext>
                   )}
                 </div>
               ))}
@@ -1107,5 +1039,137 @@ export default function MusicPage() {
         </main>
       </div>
     </AuthGuard>
+  );
+}
+
+// ═══════════════════════════════════════
+// Sortable Track Row (drag & drop)
+// ═══════════════════════════════════════
+
+function SortableTrackRow({
+  id,
+  track,
+  index,
+  isExpanded,
+  deleting,
+  onExpand,
+  onDelete,
+  children,
+}: {
+  id: string;
+  track: Track;
+  index: number;
+  isExpanded: boolean;
+  deleting: boolean;
+  onExpand: () => void;
+  onDelete: () => void;
+  children?: React.ReactNode;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : undefined,
+    opacity: isDragging ? 0.85 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      {/* Track row */}
+      <div
+        className={`flex items-center gap-2 bg-white border rounded-lg px-3 py-3 transition-all ${
+          isDragging
+            ? "border-amber-500 shadow-lg ring-2 ring-amber-500/20"
+            : isExpanded
+            ? "border-amber-500/50 rounded-b-none shadow-sm"
+            : "border-zinc-200 hover:border-zinc-300 hover:shadow-sm"
+        }`}
+      >
+        {/* Drag handle */}
+        <button
+          {...attributes}
+          {...listeners}
+          className="flex-shrink-0 cursor-grab active:cursor-grabbing text-zinc-300 hover:text-amber-500 touch-none p-1"
+          title="Arrastrar para reordenar"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <circle cx="9" cy="5" r="1.5" />
+            <circle cx="15" cy="5" r="1.5" />
+            <circle cx="9" cy="12" r="1.5" />
+            <circle cx="15" cy="12" r="1.5" />
+            <circle cx="9" cy="19" r="1.5" />
+            <circle cx="15" cy="19" r="1.5" />
+          </svg>
+        </button>
+        {/* Position number */}
+        <span className="text-amber-600/60 font-mono text-sm w-6 text-center flex-shrink-0">
+          {index + 1}
+        </span>
+        {/* Clickable content area */}
+        <div
+          onClick={onExpand}
+          className="flex items-center gap-4 flex-1 min-w-0 cursor-pointer"
+        >
+          {track.coverUrl && (
+            <img
+              src={track.coverUrl}
+              alt=""
+              className="w-10 h-10 rounded object-cover flex-shrink-0"
+            />
+          )}
+          <div className="flex-1 min-w-0">
+            <p className="font-medium text-zinc-900 truncate">
+              {track.title}
+            </p>
+            <p className="text-sm text-zinc-500 truncate">
+              {track.artist}
+              {track.style ? ` \u00B7 ${track.style}` : ""}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {track.isLockedByChapter && (
+            <Badge variant="outline" className="text-amber-500 border-amber-400/30">
+              Bloqueado
+            </Badge>
+          )}
+          {track.isInstrumental && (
+            <Badge variant="outline" className="text-purple-400 border-purple-400/30">
+              Instrumental
+            </Badge>
+          )}
+          {track.lyrics && (
+            <Badge variant="outline" className="text-blue-400 border-blue-400/30">
+              Letra
+            </Badge>
+          )}
+          {track.active ? (
+            <Badge className="bg-green-500/20 text-green-400">Activo</Badge>
+          ) : (
+            <Badge className="bg-zinc-700 text-zinc-400">Inactivo</Badge>
+          )}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            disabled={deleting}
+            className="text-zinc-600 hover:text-red-400 text-sm ml-2 disabled:opacity-50"
+          >
+            {deleting ? "..." : "Eliminar"}
+          </button>
+        </div>
+      </div>
+      {/* Expanded edit form (children) */}
+      {children}
+    </div>
   );
 }
