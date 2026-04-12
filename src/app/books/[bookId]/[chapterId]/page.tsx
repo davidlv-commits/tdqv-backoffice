@@ -1,16 +1,17 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { AuthGuard } from "@/components/auth-guard";
 import { Sidebar } from "@/components/sidebar";
 import { ChapterRichEditor, type MediaHookWithPosition } from "@/components/chapter-rich-editor";
-import { getChapter, getMediaMoments, saveChapter, saveMediaMoment, deleteMediaMoment } from "@/lib/firestore";
+import { getChapter, getMediaMoments, saveChapter, saveMediaMoment, deleteMediaMoment, splitChapter } from "@/lib/firestore";
 import type { Chapter, MediaMoment } from "@/lib/types";
 
 export default function ChapterEditorPage() {
   const { bookId, chapterId } = useParams<{ bookId: string; chapterId: string }>();
+  const router = useRouter();
   const [chapter, setChapter] = useState<Chapter | null>(null);
   const [moments, setMoments] = useState<MediaMoment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -84,6 +85,23 @@ export default function ChapterEditorPage() {
     }
   }, [bookId, chapterId, chapter, moments]);
 
+  const handleSplit = useCallback(async (splitAtParagraph: number, newTitle: string) => {
+    if (!chapter) return;
+    try {
+      setSaveMessage("Dividiendo capítulo...");
+      const newChapterId = await splitChapter(bookId, chapterId, splitAtParagraph, newTitle);
+      setSaveMessage(`¡Dividido! Nuevo capítulo: "${newTitle}"`);
+      // Navigate to the book page to see the result.
+      setTimeout(() => {
+        router.push(`/books/${bookId}`);
+      }, 1500);
+    } catch (e) {
+      console.error("Split error:", e);
+      setSaveMessage(`Error al dividir: ${e instanceof Error ? e.message : String(e)}`);
+      setTimeout(() => setSaveMessage(""), 4000);
+    }
+  }, [bookId, chapterId, chapter, router]);
+
   // Convert existing moments to hooks for the editor (preserving paragraphIndex).
   const existingHooks = moments.map((m) => ({
     mediaType: m.mediaType,
@@ -134,6 +152,7 @@ export default function ChapterEditorPage() {
               <ChapterRichEditor
                 initialContent={chapter.body}
                 onSave={handleSave}
+                onSplit={handleSplit}
                 existingHooks={existingHooks}
               />
             )}

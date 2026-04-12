@@ -46,6 +46,138 @@ export async function saveChapter(bookId: string, chapter: Partial<Chapter> & { 
   }, { merge: true });
 }
 
+export async function addChapter(bookId: string, chapter: Omit<Chapter, 'id' | 'bookId'>) {
+  const ref = await addDoc(collection(db, 'books', bookId, 'chapters'), {
+    ...chapter,
+    updatedAt: Timestamp.now(),
+  });
+  return ref;
+}
+
+export async function deleteChapter(bookId: string, chapterId: string) {
+  await deleteDoc(doc(db, 'books', bookId, 'chapters', chapterId));
+}
+
+/**
+ * Renumber all chapters from `startOrder` onwards by incrementing their order by `delta`.
+ * Used after splits/inserts to push subsequent chapters down.
+ */
+export async function renumberChaptersFrom(
+  bookId: string,
+  startOrder: number,
+  delta: number = 1,
+  excludeId?: string,
+) {
+  const chapters = await getChapters(bookId);
+  const toUpdate = chapters.filter(
+    (ch) => ch.order >= startOrder && ch.id !== excludeId
+  );
+  for (const ch of toUpdate) {
+    await setDoc(
+      doc(db, 'books', bookId, 'chapters', ch.id),
+      { order: ch.order + delta, updatedAt: Timestamp.now() },
+      { merge: true },
+    );
+  }
+}
+
+/**
+ * Split a chapter at a given paragraph index.
+ * Everything from paragraphIndex onwards goes into a new chapter.
+ * Subsequent chapters are renumbered.
+ * Media moments are reassigned accordingly.
+ */
+export async function splitChapter(
+  bookId: string,
+  chapterId: string,
+  splitAtParagraph: number,
+  newChapterTitle: string,
+) {
+  const chapter = await getChapter(bookId, chapterId);
+  if (!chapter) throw new Error('Chapter not found');
+
+  const paragraphs = chapter.body.split('\n\n').filter((p) => p.trim());
+  if (splitAtParagraph <= 0 || splitAtParagraph >= paragraphs.length) {
+    throw new Error('Invalid split position');
+  }
+
+  const bodyBefore = paragraphs.slice(0, splitAtParagraph).join('\n\n');
+  const bodyAfter = paragraphs.slice(splitAtParagraph).join('\n\n');
+
+  // Renumber chapters after the current one to make room.
+  await renumberChaptersFrom(bookId, chapter.order + 1);
+
+  // Create the new chapter with the second half.
+  const newChapterRef = await addChapter(bookId, {
+    title: newChapterTitle,
+    order: chapter.order + 1,
+    body: bodyAfter,
+    paragraphCount: paragraphs.length - splitAtParagraph,
+    status: chapter.status,
+    mediaMomentCount: 0,
+  });
+
+  // Update the original chapter with the first half.
+  await saveChapter(bookId, {
+    id: chapterId,
+    body: bodyBefore,
+    paragraphCount: splitAtParagraph,
+  });
+
+  // Reassign media moments: those at or after splitAtParagraph go to the new chapter.
+  const moments = await getMediaMoments(bookId, chapterId);
+  let newChapterMediaCount = 0;
+  let oldChapterMediaCount = 0;
+
+  for (const m of moments) {
+    if (m.paragraphIndex >= splitAtParagraph) {
+      // Move to new chapter with adjusted paragraphIndex.
+      await deleteMediaMoment(m.id);
+      await saveMediaMoment({
+        bookId,
+        chapterId: newChapterRef.id,
+        paragraphIndex: m.paragraphIndex - splitAtParagraph,
+        mediaType: m.mediaType,
+        mediaId: m.mediaId,
+        title: m.title,
+        mediaUrl: m.mediaUrl,
+        isExclusive: m.isExclusive,
+        displayStyle: m.displayStyle,
+        autoplay: m.autoplay,
+        initialVolume: m.initialVolume,
+        crossfadeWithId: m.crossfadeWithId,
+        order: m.order,
+        active: m.active,
+      });
+      newChapterMediaCount++;
+    } else {
+      oldChapterMediaCount++;
+    }
+  }
+
+  // Update media moment counts.
+  await saveChapter(bookId, { id: chapterId, mediaMomentCount: oldChapterMediaCount });
+  await saveChapter(bookId, { id: newChapterRef.id, mediaMomentCount: newChapterMediaCount });
+
+  return newChapterRef.id;
+}
+
+/**
+ * Compact renumber: set all chapter orders to sequential 1, 2, 3...
+ */
+export async function compactRenumberChapters(bookId: string) {
+  const chapters = await getChapters(bookId);
+  for (let i = 0; i < chapters.length; i++) {
+    if (chapters[i].order !== i + 1) {
+      await setDoc(
+        doc(db, 'books', bookId, 'chapters', chapters[i].id),
+        { order: i + 1, updatedAt: Timestamp.now() },
+        { merge: true },
+      );
+    }
+  }
+}
+
 // ═══ Media Moments ═══
 
 export async function getMediaMoments(bookId: string, chapterId: string): Promise<MediaMoment[]> {

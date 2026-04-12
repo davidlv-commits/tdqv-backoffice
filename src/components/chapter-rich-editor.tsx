@@ -20,6 +20,7 @@ import type { Track, MediaType } from "@/lib/types";
 interface ChapterRichEditorProps {
   initialContent: string;
   onSave: (body: string, mediaHooks: MediaHookWithPosition[]) => Promise<void>;
+  onSplit?: (splitAtParagraph: number, newTitle: string) => Promise<void>;
   existingHooks?: MediaHook[];
 }
 
@@ -44,10 +45,15 @@ export interface MediaHookWithPosition extends MediaHook {
 export function ChapterRichEditor({
   initialContent,
   onSave,
+  onSplit,
   existingHooks = [],
 }: ChapterRichEditorProps) {
   const [saving, setSaving] = useState(false);
   const [showInsert, setShowInsert] = useState(false);
+  const [showSplitDialog, setShowSplitDialog] = useState(false);
+  const [splitParagraphIndex, setSplitParagraphIndex] = useState<number | null>(null);
+  const [splitTitle, setSplitTitle] = useState("");
+  const [splitting, setSplitting] = useState(false);
 
   // Available media from Firestore.
   const [availableTracks, setAvailableTracks] = useState<Track[]>([]);
@@ -205,6 +211,39 @@ export function ChapterRichEditor({
     return { body: paragraphs.join("\n\n"), hooks };
   };
 
+  /**
+   * Gets the paragraph index where the cursor currently is.
+   * Returns -1 if cursor is not in a paragraph.
+   */
+  const getCursorParagraphIndex = (editor: ReturnType<typeof useEditor>): number => {
+    if (!editor) return -1;
+    const json = editor.getJSON();
+    const { from } = editor.state.selection;
+
+    let pos = 0;
+    let paragraphIndex = 0;
+
+    for (const node of json.content || []) {
+      // Each node has a start/end position. We track position manually.
+      const nodeSize = editor.state.doc.child(
+        (json.content || []).indexOf(node)
+      ).nodeSize;
+
+      if (node.type === "paragraph") {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const text = (node.content || []).map((c: any) => c.text || "").join("");
+        if (text.trim()) {
+          if (from >= pos && from <= pos + nodeSize) {
+            return paragraphIndex;
+          }
+          paragraphIndex++;
+        }
+      }
+      pos += nodeSize;
+    }
+    return paragraphIndex > 0 ? paragraphIndex - 1 : -1;
+  };
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -277,6 +316,74 @@ export function ChapterRichEditor({
     setCrossfadeFromPrevious(false);
   }, [editor, selectedTrackId, availableTracks, autoplay, initialVolume, crossfadeFromPrevious, selectedMediaType]);
 
+  const handleSplitHere = useCallback(() => {
+    if (!editor) return;
+
+    // First, save current state to get accurate body
+    const { body } = htmlToBody(editor);
+    const paragraphs = body.split("\n\n").filter(p => p.trim());
+
+    if (paragraphs.length < 2) {
+      alert("El capítulo necesita al menos 2 párrafos para dividirlo.");
+      return;
+    }
+
+    // Find which paragraph the cursor is in
+    const cursorPos = editor.state.selection.from;
+    let nodeIndex = 0;
+    let paragraphCount = 0;
+    const doc = editor.state.doc;
+
+    doc.forEach((node, offset) => {
+      if (offset + node.nodeSize <= cursorPos) {
+        if (node.type.name === "paragraph" && node.textContent.trim()) {
+          paragraphCount++;
+        }
+      }
+      nodeIndex++;
+    });
+
+    // splitAt = number of paragraphs that stay in the FIRST chapter
+    const splitAt = Math.max(1, paragraphCount);
+
+    if (splitAt >= paragraphs.length) {
+      // Cursor is at the end — show dialog anyway but with last possible split
+      setSplitParagraphIndex(paragraphs.length - 1);
+    } else {
+      setSplitParagraphIndex(splitAt);
+    }
+
+    setSplitTitle("");
+    setShowSplitDialog(true);
+  }, [editor]);
+
+  const handleConfirmSplit = useCallback(async () => {
+    if (splitParagraphIndex === null || !splitTitle.trim() || !onSplit) return;
+
+    // First save current content
+    if (editor) {
+      setSplitting(true);
+      const { body, hooks } = htmlToBody(editor);
+      await onSave(body, hooks);
+      // Then split
+      await onSplit(splitParagraphIndex, splitTitle.trim());
+      setSplitting(false);
+      setShowSplitDialog(false);
+    }
+  }, [editor, splitParagraphIndex, splitTitle, onSplit, onSave]);
+
+  // Preview split: show which paragraphs go where
+  const getSplitPreview = () => {
+    if (!editor || splitParagraphIndex === null) return null;
+    const { body } = htmlToBody(editor);
+    const paragraphs = body.split("\n\n").filter(p => p.trim());
+    const before = paragraphs.slice(0, splitParagraphIndex);
+    const after = paragraphs.slice(splitParagraphIndex);
+    return { before, after, total: paragraphs.length };
+  };
+
+  const splitPreview = showSplitDialog ? getSplitPreview() : null;
+
   return (
     <div className="flex flex-col h-[calc(100vh-140px)]">
       {/* Toolbar — fixed at top */}
@@ -326,6 +433,17 @@ export function ChapterRichEditor({
           >
             💬 Msg suyo
           </Button>
+          <div className="w-px h-6 bg-zinc-200 mx-1" />
+          {onSplit && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-red-600 border-red-300 hover:bg-red-50"
+              onClick={handleSplitHere}
+            >
+              ✂️ Dividir capítulo aquí
+            </Button>
+          )}
           <span className="text-xs text-zinc-400 ml-2">
             Cursor donde quieras
           </span>
@@ -339,6 +457,106 @@ export function ChapterRichEditor({
           {saving ? "Guardando..." : "Guardar cambios"}
         </Button>
       </div>
+
+      {/* Split dialog */}
+      {showSplitDialog && splitPreview && (
+        <div className="flex-shrink-0 bg-red-50 border-b border-red-200 px-4 py-4 space-y-3">
+          <div className="flex items-start gap-4">
+            <div className="flex-1">
+              <h3 className="font-semibold text-red-800 text-sm mb-2">
+                ✂️ Dividir capítulo en la posición del cursor
+              </h3>
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                <div className="bg-white rounded-lg border border-zinc-200 p-3">
+                  <p className="text-xs font-semibold text-zinc-500 mb-1">
+                    Capítulo actual (se queda con {splitPreview.before.length} párrafos)
+                  </p>
+                  <p className="text-xs text-zinc-600 line-clamp-3">
+                    {splitPreview.before[0]?.substring(0, 120)}...
+                  </p>
+                  {splitPreview.before.length > 1 && (
+                    <p className="text-xs text-zinc-400 mt-1">
+                      ...y {splitPreview.before.length - 1} párrafos más
+                    </p>
+                  )}
+                </div>
+                <div className="bg-white rounded-lg border border-green-200 p-3">
+                  <p className="text-xs font-semibold text-green-600 mb-1">
+                    Nuevo capítulo ({splitPreview.after.length} párrafos)
+                  </p>
+                  <p className="text-xs text-zinc-600 line-clamp-3">
+                    {splitPreview.after[0]?.substring(0, 120)}...
+                  </p>
+                  {splitPreview.after.length > 1 && (
+                    <p className="text-xs text-zinc-400 mt-1">
+                      ...y {splitPreview.after.length - 1} párrafos más
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Slider to adjust split position */}
+              <div className="mb-3">
+                <label className="text-xs text-zinc-500 mb-1 block">
+                  Ajustar posición de corte (párrafo {splitParagraphIndex} de {splitPreview.total})
+                </label>
+                <input
+                  type="range"
+                  min={1}
+                  max={splitPreview.total - 1}
+                  value={splitParagraphIndex ?? 1}
+                  onChange={(e) => setSplitParagraphIndex(Number(e.target.value))}
+                  className="w-full h-1.5 accent-red-500"
+                />
+                <div className="flex justify-between text-[10px] text-zinc-400 mt-0.5">
+                  <span>Párrafo 1</span>
+                  <span>Párrafo {splitPreview.total}</span>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs text-zinc-500 mb-1 block">
+                  Título del nuevo capítulo *
+                </label>
+                <input
+                  type="text"
+                  value={splitTitle}
+                  onChange={(e) => setSplitTitle(e.target.value)}
+                  placeholder="Ej: Queríamos vernos"
+                  className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && splitTitle.trim()) handleConfirmSplit();
+                  }}
+                />
+                <p className="text-[10px] text-zinc-400 mt-1">
+                  Los capítulos posteriores se renumerarán automáticamente.
+                  Los media moments se reasignarán al capítulo correcto.
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              onClick={handleConfirmSplit}
+              disabled={!splitTitle.trim() || splitting}
+              className="bg-red-600 hover:bg-red-700 text-white h-9"
+            >
+              {splitting ? "Dividiendo..." : "✂️ Confirmar división"}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setShowSplitDialog(false)}
+              className="h-9 text-zinc-500"
+              disabled={splitting}
+            >
+              Cancelar
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Insert media panel — fixed below toolbar */}
       {showInsert && (
