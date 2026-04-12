@@ -141,9 +141,9 @@ export default function SecretsPage() {
           {/* Info banner */}
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">
             <p className="text-sm text-amber-800">
-              <strong>Texto censurado en capitulos:</strong> Para censurar una palabra o frase en el texto de un capitulo,
-              usa la marca <code className="bg-amber-100 px-1.5 py-0.5 rounded text-amber-900 font-mono text-xs">{"{{censurado:texto oculto}}"}</code> en
-              el cuerpo del capitulo. Los usuarios free veran la palabra con blur y un candado; los premium la veran con un acento dorado.
+              <strong>Blog secreto:</strong> Los secretos se desbloquean cuando el lector completa ambos libros.
+              Crea entradas con titulo, texto e imagen opcional — como un blog privado con contenido exclusivo
+              que premia a los lectores mas fieles.
             </p>
           </div>
 
