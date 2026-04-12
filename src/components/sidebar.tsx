@@ -13,6 +13,7 @@ const MEDIA_ITEMS = [
   { href: "/images", label: "Imágenes", icon: "🖼️" },
   { href: "/videos", label: "Vídeos", icon: "🎬" },
   { href: "/audios", label: "Audios", icon: "🎙️" },
+  { href: "/secrets", label: "Secretos", icon: "🔐" },
 ];
 
 const ANALYTICS_ITEMS = [
