@@ -246,3 +246,29 @@ export async function addVideo(video: Omit<Video, 'id'>) {
 export async function deleteVideo(id: string) {
   await deleteDoc(doc(db, 'videos', id));
 }
+
+// ═══ Albums ═══
+
+export interface Album {
+  id: string;
+  name: string;
+  coverUrl: string;
+  trackCount?: number;
+}
+
+export async function getAlbums(): Promise<Album[]> {
+  const snap = await getDocs(collection(db, 'albums'));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() } as Album));
+}
+
+export async function saveAlbum(album: Partial<Album> & { id: string }) {
+  const { id, ...data } = album;
+  await setDoc(doc(db, 'albums', id), {
+    ...data,
+    updatedAt: Timestamp.now(),
+  }, { merge: true });
+}
+
+export async function deleteAlbum(id: string) {
+  await deleteDoc(doc(db, 'albums', id));
+}
