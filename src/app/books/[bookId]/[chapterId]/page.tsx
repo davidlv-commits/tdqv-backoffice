@@ -6,7 +6,7 @@ import Link from "next/link";
 import { AuthGuard } from "@/components/auth-guard";
 import { Sidebar } from "@/components/sidebar";
 import { ChapterRichEditor, type MediaHookWithPosition } from "@/components/chapter-rich-editor";
-import { getChapter, getMediaMoments, saveChapter, saveMediaMoment, deleteMediaMoment, splitChapter } from "@/lib/firestore";
+import { getChapter, getChapters, getMediaMoments, saveChapter, saveMediaMoment, deleteMediaMoment, splitChapter } from "@/lib/firestore";
 import type { Chapter, MediaMoment } from "@/lib/types";
 
 export default function ChapterEditorPage() {
@@ -17,13 +17,38 @@ export default function ChapterEditorPage() {
   const [loading, setLoading] = useState(true);
   const [saveMessage, setSaveMessage] = useState("");
 
+  // Navigation: prev/next chapter IDs.
+  const [prevChapterId, setPrevChapterId] = useState<string | null>(null);
+  const [nextChapterId, setNextChapterId] = useState<string | null>(null);
+  const [prevChapterTitle, setPrevChapterTitle] = useState<string>("");
+  const [nextChapterTitle, setNextChapterTitle] = useState<string>("");
+
   useEffect(() => {
     Promise.all([
       getChapter(bookId, chapterId),
       getMediaMoments(bookId, chapterId),
-    ]).then(([ch, mm]) => {
+      getChapters(bookId),
+    ]).then(([ch, mm, allChapters]) => {
       setChapter(ch);
       setMoments(mm);
+
+      // Find prev/next chapters.
+      const idx = allChapters.findIndex((c) => c.id === chapterId);
+      if (idx > 0) {
+        setPrevChapterId(allChapters[idx - 1].id);
+        setPrevChapterTitle(allChapters[idx - 1].title);
+      } else {
+        setPrevChapterId(null);
+        setPrevChapterTitle("");
+      }
+      if (idx >= 0 && idx < allChapters.length - 1) {
+        setNextChapterId(allChapters[idx + 1].id);
+        setNextChapterTitle(allChapters[idx + 1].title);
+      } else {
+        setNextChapterId(null);
+        setNextChapterTitle("");
+      }
+
       setLoading(false);
     });
   }, [bookId, chapterId]);
@@ -134,11 +159,40 @@ export default function ChapterEditorPage() {
                   </p>
                 </div>
               </div>
-              {saveMessage && (
-                <span className={`text-sm font-medium ${saveMessage.includes("Error") ? "text-red-500" : "text-green-600"}`}>
-                  {saveMessage}
-                </span>
-              )}
+              <div className="flex items-center gap-3">
+                {saveMessage && (
+                  <span className={`text-sm font-medium ${saveMessage.includes("Error") ? "text-red-500" : "text-green-600"}`}>
+                    {saveMessage}
+                  </span>
+                )}
+                {/* Prev/Next chapter navigation */}
+                <div className="flex items-center gap-1 ml-4">
+                  {prevChapterId ? (
+                    <Link
+                      href={`/books/${bookId}/${prevChapterId}`}
+                      className="flex items-center gap-1 px-3 py-1.5 text-sm text-zinc-500 hover:text-zinc-800 hover:bg-zinc-100 rounded-lg transition-colors"
+                      title={prevChapterTitle}
+                    >
+                      <span>←</span>
+                      <span className="hidden lg:inline max-w-[120px] truncate">{prevChapterTitle}</span>
+                    </Link>
+                  ) : (
+                    <span className="px-3 py-1.5 text-sm text-zinc-300 cursor-not-allowed">←</span>
+                  )}
+                  {nextChapterId ? (
+                    <Link
+                      href={`/books/${bookId}/${nextChapterId}`}
+                      className="flex items-center gap-1 px-3 py-1.5 text-sm text-zinc-500 hover:text-zinc-800 hover:bg-zinc-100 rounded-lg transition-colors"
+                      title={nextChapterTitle}
+                    >
+                      <span className="hidden lg:inline max-w-[120px] truncate">{nextChapterTitle}</span>
+                      <span>→</span>
+                    </Link>
+                  ) : (
+                    <span className="px-3 py-1.5 text-sm text-zinc-300 cursor-not-allowed">→</span>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 
