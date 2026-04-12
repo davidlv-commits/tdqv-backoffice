@@ -236,11 +236,15 @@ export async function getVideos(): Promise<Video[]> {
 
 export async function saveVideo(video: Partial<Video> & { id: string }) {
   const { id, ...data } = video;
-  await setDoc(doc(db, 'videos', id), data, { merge: true });
+  // Strip undefined values — Firestore rejects them.
+  const clean = Object.fromEntries(Object.entries(data).filter(([, v]) => v !== undefined));
+  await setDoc(doc(db, 'videos', id), clean, { merge: true });
 }
 
 export async function addVideo(video: Omit<Video, 'id'>) {
-  return addDoc(collection(db, 'videos'), video);
+  // Strip undefined values — Firestore rejects them.
+  const clean = Object.fromEntries(Object.entries(video).filter(([, v]) => v !== undefined));
+  return addDoc(collection(db, 'videos'), clean);
 }
 
 export async function deleteVideo(id: string) {

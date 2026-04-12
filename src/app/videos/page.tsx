@@ -70,33 +70,43 @@ export default function VideosPage() {
   const handleCreate = async () => {
     if (!newVideo.title) return;
     setSaving(true);
-    const ytId = newVideo.source === "youtube" ? extractYoutubeId(newVideo.youtubeId) : "";
-    await addVideo({
-      title: newVideo.title,
-      description: newVideo.description,
-      source: newVideo.source,
-      youtubeId: ytId,
-      videoUrl: newVideo.source === "youtube" ? "" : newVideo.videoUrl,
-      thumbnailUrl: newVideo.source === "youtube" ? getYoutubeThumbnail(ytId) : newVideo.thumbnailUrl,
-      order: newVideo.order || (videos.length + 1),
-      active: newVideo.active,
-      lockedUntilChapter: newVideo.isLockedByChapter ? newVideo.lockedUntilChapter : undefined,
-      lockedUntilChapterTitle: newVideo.isLockedByChapter ? newVideo.lockedUntilChapterTitle : undefined,
-      isLockedByChapter: newVideo.isLockedByChapter,
-    });
-    const updated = await getVideos();
-    setVideos(updated);
-    setShowForm(false);
-    setNewVideo({ title: "", description: "", source: "youtube", youtubeId: "", videoUrl: "", thumbnailUrl: "", order: 0, active: true, lockedUntilChapter: "", lockedUntilChapterTitle: "", isLockedByChapter: false });
+    try {
+      const ytId = newVideo.source === "youtube" ? extractYoutubeId(newVideo.youtubeId) : "";
+      await addVideo({
+        title: newVideo.title,
+        description: newVideo.description || "",
+        source: newVideo.source,
+        youtubeId: ytId,
+        videoUrl: newVideo.source === "youtube" ? "" : newVideo.videoUrl,
+        thumbnailUrl: newVideo.source === "youtube" ? getYoutubeThumbnail(ytId) : newVideo.thumbnailUrl || "",
+        order: newVideo.order || (videos.length + 1),
+        active: newVideo.active,
+        ...(newVideo.isLockedByChapter && newVideo.lockedUntilChapter
+          ? { lockedUntilChapter: newVideo.lockedUntilChapter, lockedUntilChapterTitle: newVideo.lockedUntilChapterTitle, isLockedByChapter: true }
+          : { isLockedByChapter: false }),
+      });
+      const updated = await getVideos();
+      setVideos(updated);
+      setShowForm(false);
+      setNewVideo({ title: "", description: "", source: "youtube", youtubeId: "", videoUrl: "", thumbnailUrl: "", order: 0, active: true, lockedUntilChapter: "", lockedUntilChapterTitle: "", isLockedByChapter: false });
+    } catch (e) {
+      console.error("Error creando video:", e);
+      alert("Error al guardar el video. Revisa la consola.");
+    }
     setSaving(false);
   };
 
   const handleSave = async () => {
     if (!expandedId) return;
     setSaving(true);
-    await saveVideo({ id: expandedId, ...editData } as Partial<Video> & { id: string });
-    setVideos(prev => prev.map(v => v.id === expandedId ? { ...v, ...editData } : v));
-    setExpandedId(null);
+    try {
+      await saveVideo({ id: expandedId, ...editData } as Partial<Video> & { id: string });
+      setVideos(prev => prev.map(v => v.id === expandedId ? { ...v, ...editData } : v));
+      setExpandedId(null);
+    } catch (e) {
+      console.error("Error guardando video:", e);
+      alert("Error al guardar. Revisa la consola.");
+    }
     setSaving(false);
   };
 
