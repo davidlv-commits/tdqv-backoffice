@@ -187,7 +187,7 @@ export default function BookChapters() {
                     value={newChapterTitle}
                     onChange={(e) => setNewChapterTitle(e.target.value)}
                     placeholder="Ej: Queríamos vernos"
-                    className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm text-zinc-900 bg-white focus:ring-2 focus:ring-green-500 focus:border-green-500"
                     autoFocus
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && newChapterTitle.trim()) handleInsertChapter();
