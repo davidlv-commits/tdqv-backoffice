@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { getTracks, saveTrack, deleteTrack, getBooks, getChapters } from "@/lib/firestore";
+import { getTracks, saveTrack, deleteTrack, getBooks, getChapters, getAlbums, saveAlbum, type Album } from "@/lib/firestore";
 import type { Track, Chapter, Book } from "@/lib/types";
 import { addDoc, collection, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -42,6 +42,12 @@ export default function MusicPage() {
   // Album collapse state
   const [collapsedAlbums, setCollapsedAlbums] = useState<Set<string>>(new Set());
 
+  // Album covers
+  const [albumCovers, setAlbumCovers] = useState<Record<string, string>>({});
+  const [uploadingAlbumCover, setUploadingAlbumCover] = useState<string | null>(null);
+  const [albumCoverProgress, setAlbumCoverProgress] = useState(0);
+  const albumCoverRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
   // File picker refs for edit form
   const editAudioRef = useRef<HTMLInputElement>(null);
   const editCoverRef = useRef<HTMLInputElement>(null);
@@ -72,11 +78,16 @@ export default function MusicPage() {
   const [newAudioFile, setNewAudioFile] = useState<File | null>(null);
   const [newCoverFile, setNewCoverFile] = useState<File | null>(null);
 
-  // Load tracks
+  // Load tracks and album covers
   useEffect(() => {
-    getTracks()
-      .then((t) => {
+    Promise.all([getTracks(), getAlbums()])
+      .then(([t, albums]) => {
         setTracks(t);
+        const covers: Record<string, string> = {};
+        for (const a of albums) {
+          if (a.coverUrl) covers[a.name] = a.coverUrl;
+        }
+        setAlbumCovers(covers);
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -161,6 +172,26 @@ export default function MusicPage() {
       return next;
     });
   };
+
+  const handleUploadAlbumCover = useCallback(async (albumName: string, file: File) => {
+    setUploadingAlbumCover(albumName);
+    setAlbumCoverProgress(0);
+    try {
+      const publicUrl = await uploadFile(file, "covers/albums", (p) =>
+        setAlbumCoverProgress(p)
+      );
+      const albumId = albumName
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "-")
+        .replace(/-+/g, "-");
+      await saveAlbum({ id: albumId, name: albumName, coverUrl: publicUrl });
+      setAlbumCovers((prev) => ({ ...prev, [albumName]: publicUrl }));
+    } catch (e) {
+      console.error("Error uploading album cover:", e);
+    }
+    setUploadingAlbumCover(null);
+    setAlbumCoverProgress(0);
+  }, []);
 
   const handleExpand = (track: Track) => {
     if (expandedId === track.id) {
@@ -781,36 +812,79 @@ export default function MusicPage() {
               {albumGroups.map(([albumName, albumTracks]) => (
                 <div key={albumName}>
                   {/* Album header */}
-                  <button
-                    onClick={() => toggleAlbum(albumName)}
-                    className="flex items-center gap-3 mb-2 group w-full text-left"
-                  >
-                    <svg
-                      className={`w-4 h-4 text-zinc-400 transition-transform ${
-                        collapsedAlbums.has(albumName) ? "-rotate-90" : ""
-                      }`}
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
+                  <div className="flex items-center gap-3 mb-2">
+                    <button
+                      onClick={() => toggleAlbum(albumName)}
+                      className="flex items-center gap-3 group text-left flex-1 min-w-0"
                     >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M19 9l-7 7-7-7"
+                      <svg
+                        className={`w-4 h-4 text-zinc-400 transition-transform flex-shrink-0 ${
+                          collapsedAlbums.has(albumName) ? "-rotate-90" : ""
+                        }`}
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M19 9l-7 7-7-7"
+                        />
+                      </svg>
+                      <h3 className="text-sm font-semibold text-zinc-700 group-hover:text-zinc-900 truncate">
+                        {albumName}
+                      </h3>
+                      <Badge
+                        variant="outline"
+                        className="text-zinc-400 border-zinc-300 text-xs flex-shrink-0"
+                      >
+                        {albumTracks.length} track
+                        {albumTracks.length !== 1 ? "s" : ""}
+                      </Badge>
+                    </button>
+
+                    {/* Album cover upload */}
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {albumCovers[albumName] && (
+                        <img
+                          src={albumCovers[albumName]}
+                          alt={`Carátula ${albumName}`}
+                          className="w-10 h-10 rounded-lg object-cover border border-zinc-200"
+                        />
+                      )}
+                      <input
+                        ref={(el) => { albumCoverRefs.current[albumName] = el; }}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleUploadAlbumCover(albumName, file);
+                        }}
                       />
-                    </svg>
-                    <h3 className="text-sm font-semibold text-zinc-700 group-hover:text-zinc-900">
-                      {albumName}
-                    </h3>
-                    <Badge
-                      variant="outline"
-                      className="text-zinc-400 border-zinc-300 text-xs"
-                    >
-                      {albumTracks.length} track
-                      {albumTracks.length !== 1 ? "s" : ""}
-                    </Badge>
-                  </button>
+                      {uploadingAlbumCover === albumName ? (
+                        <div className="flex items-center gap-2">
+                          <div className="w-20 h-1.5 bg-zinc-200 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-amber-500 rounded-full transition-all duration-300"
+                              style={{ width: `${albumCoverProgress}%` }}
+                            />
+                          </div>
+                          <span className="text-xs text-zinc-400">{albumCoverProgress}%</span>
+                        </div>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => albumCoverRefs.current[albumName]?.click()}
+                          className="text-xs h-8 border-zinc-300 text-zinc-600 hover:text-zinc-900 hover:border-amber-500"
+                        >
+                          {albumCovers[albumName] ? "Cambiar carátula" : "Carátula álbum"}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
 
                   {/* Album tracks */}
                   {!collapsedAlbums.has(albumName) && (
