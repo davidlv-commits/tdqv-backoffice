@@ -53,6 +53,12 @@ export default function VideosPage() {
   const [editVideoFile, setEditVideoFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
 
+  // Cover image upload state
+  const newCoverFileRef = useRef<HTMLInputElement>(null);
+  const editCoverFileRef = useRef<HTMLInputElement>(null);
+  const [newCoverFile, setNewCoverFile] = useState<File | null>(null);
+  const [editCoverFile, setEditCoverFile] = useState<File | null>(null);
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -105,7 +111,10 @@ export default function VideosPage() {
         videoUrl = await uploadFile(newVideoFile, "videos", setUploadProgress);
       }
 
-      if (newVideo.source === "youtube") {
+      // Upload cover image if selected.
+      if (newCoverFile) {
+        thumbnailUrl = await uploadFile(newCoverFile, "covers", setUploadProgress);
+      } else if (newVideo.source === "youtube") {
         thumbnailUrl = getYoutubeThumbnail(ytId);
       }
 
@@ -127,6 +136,7 @@ export default function VideosPage() {
       setShowForm(false);
       setNewVideo({ title: "", description: "", source: "youtube", youtubeId: "", videoUrl: "", thumbnailUrl: "", order: 0, active: true, lockedUntilChapter: "", lockedUntilChapterTitle: "", isLockedByChapter: false });
       setNewVideoFile(null);
+      setNewCoverFile(null);
       setUploadProgress(0);
     } catch (e) {
       console.error("Error creando video:", e);
@@ -147,10 +157,16 @@ export default function VideosPage() {
         data.videoUrl = await uploadFile(editVideoFile, "videos", setUploadProgress);
       }
 
+      // Upload new cover image if changed.
+      if (editCoverFile) {
+        data.thumbnailUrl = await uploadFile(editCoverFile, "covers", setUploadProgress);
+      }
+
       await saveVideo({ id: expandedId, ...data } as Partial<Video> & { id: string });
       setVideos(prev => prev.map(v => v.id === expandedId ? { ...v, ...data } : v));
       setExpandedId(null);
       setEditVideoFile(null);
+      setEditCoverFile(null);
       setUploadProgress(0);
     } catch (e) {
       console.error("Error guardando video:", e);
@@ -194,7 +210,7 @@ export default function VideosPage() {
     }
   }, [videos]);
 
-  const renderSourceForm = (data: Record<string, unknown>, update: (k: string, v: unknown) => void, fileRef: React.RefObject<HTMLInputElement | null>, file: File | null, setFile: (f: File | null) => void) => {
+  const renderSourceForm = (data: Record<string, unknown>, update: (k: string, v: unknown) => void, fileRef: React.RefObject<HTMLInputElement | null>, file: File | null, setFile: (f: File | null) => void, coverRef: React.RefObject<HTMLInputElement | null>, coverFile: File | null, setCoverFile: (f: File | null) => void) => {
     const source = (data.source || "youtube") as VideoSource;
     return (
       <>
@@ -268,6 +284,11 @@ export default function VideosPage() {
                 <p className="text-[10px] text-zinc-500 mt-1">Subiendo... {uploadProgress}%</p>
               </div>
             )}
+            {!file && (data.videoUrl as string) && (
+              <div className="mt-3 rounded-lg overflow-hidden border border-zinc-200 aspect-video bg-black">
+                <video src={data.videoUrl as string} controls className="w-full h-full object-contain" />
+              </div>
+            )}
           </div>
         )}
 
@@ -280,8 +301,47 @@ export default function VideosPage() {
               placeholder="https://..."
               className="bg-white border-zinc-300 text-zinc-900"
             />
+            {(data.videoUrl as string) && (
+              <div className="mt-3 rounded-lg overflow-hidden border border-zinc-200 aspect-video bg-black">
+                <video src={data.videoUrl as string} controls className="w-full h-full object-contain" />
+              </div>
+            )}
           </div>
         )}
+
+        {/* Cover image upload */}
+        <div>
+          <Label className="text-xs text-zinc-500">Imagen de portada (opcional)</Label>
+          <input type="file" ref={coverRef} accept="image/*" className="hidden"
+            onChange={e => {
+              const f = e.target.files?.[0];
+              if (f) setCoverFile(f);
+            }} />
+          <div className="flex gap-3 mt-1 items-center">
+            <button onClick={() => coverRef.current?.click()}
+              className="border-2 border-dashed border-zinc-300 rounded-lg p-3 text-center hover:border-amber-500 transition-colors flex-1">
+              {coverFile ? (
+                <span className="text-sm text-green-600">🖼️ {coverFile.name}</span>
+              ) : (data.thumbnailUrl as string) ? (
+                <span className="text-sm text-green-600">Portada personalizada ✓</span>
+              ) : (
+                <span className="text-sm text-zinc-400">Pulsa para seleccionar imagen</span>
+              )}
+            </button>
+            {((data.thumbnailUrl as string) || coverFile) && (
+              <div className="w-20 h-14 rounded-lg overflow-hidden border border-zinc-200 flex-shrink-0">
+                <img
+                  src={coverFile ? URL.createObjectURL(coverFile) : (data.thumbnailUrl as string)}
+                  alt="Cover" className="w-full h-full object-cover"
+                />
+              </div>
+            )}
+          </div>
+          {(data.thumbnailUrl as string) && !coverFile && source !== "youtube" && (
+            <button onClick={() => { update("thumbnailUrl", ""); }}
+              className="text-[10px] text-red-400 hover:text-red-600 mt-1">Quitar portada</button>
+          )}
+        </div>
       </>
     );
   };
@@ -332,6 +392,9 @@ export default function VideosPage() {
                 newVideoFileRef,
                 newVideoFile,
                 setNewVideoFile,
+                newCoverFileRef,
+                newCoverFile,
+                setNewCoverFile,
               )}
 
               {/* Chapter lock */}
@@ -405,7 +468,7 @@ export default function VideosPage() {
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
                           <span className="text-xs text-zinc-400 font-mono">#{v.order}</span>
-                          {v.youtubeId && (
+                          {(v.youtubeId || v.videoUrl) && (
                             <button
                               onClick={e => { e.stopPropagation(); setPreviewId(previewId === v.id ? null : v.id); }}
                               className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
@@ -424,16 +487,20 @@ export default function VideosPage() {
                       </div>
 
                       {/* Inline preview */}
-                      {previewId === v.id && v.youtubeId && (
+                      {previewId === v.id && (v.youtubeId || v.videoUrl) && (
                         <div className="bg-black rounded-b-lg overflow-hidden border border-zinc-200 border-t-0" style={{ marginTop: expandedId === v.id ? 0 : undefined }}>
                           <div className="aspect-video max-h-[400px]">
-                            <iframe
-                              width="100%" height="100%"
-                              src={`https://www.youtube-nocookie.com/embed/${v.youtubeId}?autoplay=1`}
-                              title={v.title}
-                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                              allowFullScreen className="block"
-                            />
+                            {v.youtubeId ? (
+                              <iframe
+                                width="100%" height="100%"
+                                src={`https://www.youtube-nocookie.com/embed/${v.youtubeId}?autoplay=1`}
+                                title={v.title}
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                allowFullScreen className="block"
+                              />
+                            ) : (
+                              <video src={v.videoUrl} controls autoPlay className="w-full h-full object-contain" />
+                            )}
                           </div>
                         </div>
                       )}
@@ -464,6 +531,9 @@ export default function VideosPage() {
                             editVideoFileRef,
                             editVideoFile,
                             setEditVideoFile,
+                            editCoverFileRef,
+                            editCoverFile,
+                            setEditCoverFile,
                           )}
 
                           <div className="flex items-center gap-3">

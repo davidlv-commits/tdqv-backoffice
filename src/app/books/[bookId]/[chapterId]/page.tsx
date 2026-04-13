@@ -7,7 +7,7 @@ import { AuthGuard } from "@/components/auth-guard";
 import { Sidebar } from "@/components/sidebar";
 import { ChapterRichEditor, type MediaHookWithPosition } from "@/components/chapter-rich-editor";
 import { getChapter, getChapters, getMediaMoments, saveChapter, saveMediaMoment, deleteMediaMoment, splitChapter } from "@/lib/firestore";
-import type { Chapter, MediaMoment } from "@/lib/types";
+import type { Chapter, MediaMoment, ReactionType } from "@/lib/types";
 
 export default function ChapterEditorPage() {
   const { bookId, chapterId } = useParams<{ bookId: string; chapterId: string }>();
@@ -196,6 +196,17 @@ export default function ChapterEditorPage() {
             </div>
           </div>
 
+          {/* Reaction selector */}
+          {chapter && <ReactionSelector
+            bookId={bookId}
+            chapterId={chapterId}
+            selected={chapter.availableReactions || []}
+            onChange={(reactions) => {
+              setChapter(prev => prev ? { ...prev, availableReactions: reactions } : prev);
+              saveChapter(bookId, { id: chapterId, availableReactions: reactions });
+            }}
+          />}
+
           {/* Editor */}
           <div className="max-w-5xl mx-auto px-8 py-4 flex-1 min-h-0">
             {loading ? (
@@ -214,5 +225,66 @@ export default function ChapterEditorPage() {
         </main>
       </div>
     </AuthGuard>
+  );
+}
+
+// ═══════════════════════════════════════
+// Reaction types available per chapter
+// ═══════════════════════════════════════
+
+const REACTION_CATALOG: { type: ReactionType; emoji: string; label: string; tone: string }[] = [
+  { type: "me_rompio", emoji: "😢", label: "Me rompió", tone: "emocional" },
+  { type: "no_esperaba", emoji: "🤯", label: "No me lo esperaba", tone: "plot twist" },
+  { type: "estoy_muerto", emoji: "💀", label: "Estoy muerto", tone: "impactante" },
+  { type: "brutal", emoji: "🔥", label: "Brutal", tone: "intenso" },
+  { type: "precioso", emoji: "💜", label: "Precioso", tone: "contemplativo" },
+  { type: "me_parti", emoji: "😂", label: "Me partí", tone: "humor" },
+];
+
+function ReactionSelector({
+  bookId,
+  chapterId,
+  selected,
+  onChange,
+}: {
+  bookId: string;
+  chapterId: string;
+  selected: ReactionType[];
+  onChange: (reactions: ReactionType[]) => void;
+}) {
+  const toggle = (type: ReactionType) => {
+    const next = selected.includes(type)
+      ? selected.filter(r => r !== type)
+      : [...selected, type];
+    onChange(next);
+  };
+
+  return (
+    <div className="max-w-5xl mx-auto px-8 pt-4">
+      <div className="bg-white border border-zinc-200 rounded-xl px-5 py-3 flex items-center gap-3 flex-wrap">
+        <span className="text-xs text-zinc-400 font-medium mr-1">Reacciones:</span>
+        {REACTION_CATALOG.map(r => {
+          const isOn = selected.includes(r.type);
+          return (
+            <button
+              key={r.type}
+              onClick={() => toggle(r.type)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm border transition-all ${
+                isOn
+                  ? "bg-amber-50 border-amber-400 text-amber-800 shadow-sm"
+                  : "bg-zinc-50 border-zinc-200 text-zinc-400 hover:border-zinc-300 hover:text-zinc-600"
+              }`}
+              title={r.tone}
+            >
+              <span>{r.emoji}</span>
+              <span className="text-xs font-medium">{r.label}</span>
+            </button>
+          );
+        })}
+        {selected.length === 0 && (
+          <span className="text-[10px] text-zinc-300 ml-2">Selecciona las reacciones que los lectores verán en este capítulo</span>
+        )}
+      </div>
+    </div>
   );
 }

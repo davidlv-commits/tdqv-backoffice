@@ -7,6 +7,8 @@ export interface Book {
   status: 'active' | 'draft';
 }
 
+export type ReactionType = 'me_rompio' | 'no_esperaba' | 'brutal' | 'precioso' | 'estoy_muerto' | 'me_parti';
+
 export interface Chapter {
   id: string;
   bookId: string;
@@ -16,6 +18,7 @@ export interface Chapter {
   paragraphCount: number;
   status: 'published' | 'draft';
   mediaMomentCount?: number;
+  availableReactions?: ReactionType[];
 }
 
 export type MediaType = 'music' | 'audio' | 'video' | 'image' | 'chat';
